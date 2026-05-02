@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sign Up — BDX Hosting</title>
+  <link rel="stylesheet" href="{{ base }}/static/style.css" />
+  <style>
+    .auth-shell { min-height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center; background:var(--bg); padding:24px; }
+    .auth-card { width:100%; max-width:420px; }
+    .auth-logo { display:flex; align-items:center; gap:10px; margin-bottom:32px; }
+    .auth-logo-icon { width:32px; height:32px; border-radius:7px; background:var(--violet); display:flex; align-items:center; justify-content:center; box-shadow:0 0 16px rgba(124,58,237,.4); }
+    .auth-logo-text { font-size:17px; font-weight:600; letter-spacing:-.3px; }
+    .auth-heading { font-size:22px; font-weight:600; margin-bottom:4px; }
+    .auth-sub { font-size:13px; color:var(--text3); margin-bottom:28px; }
+    .auth-form { display:flex; flex-direction:column; gap:14px; }
+    .auth-form label { font-size:12px; color:var(--text3); margin-bottom:5px; display:block; }
+    .auth-form input, .auth-form select {
+      background:#0d0d0d; border:1px solid var(--border);
+      color:var(--text); border-radius:var(--radius); padding:0 12px; height:40px;
+      font-size:13px; width:100%; outline:none; transition:border-color .12s, box-shadow .12s;
+    }
+    .auth-form input:focus, .auth-form select:focus { border-color:var(--violet); box-shadow:0 0 0 3px rgba(124,58,237,.1); }
+    .auth-form select option { background:#111; }
+    .auth-submit {
+      height:40px; border-radius:var(--radius); background:var(--violet); color:#fff;
+      font-size:13px; font-weight:500; width:100%; cursor:pointer; border:none;
+      margin-top:4px; transition:background .12s, box-shadow .12s;
+    }
+    .auth-submit:hover { background:var(--violet-l); box-shadow:0 0 16px rgba(124,58,237,.3); }
+    .auth-footer { text-align:center; margin-top:20px; font-size:12px; color:var(--text3); }
+    .auth-footer a { color:var(--violet-l); }
+    .auth-error { background:var(--red-bg); border:1px solid rgba(239,68,68,.15); color:var(--red); padding:10px 14px; border-radius:var(--radius); font-size:12px; margin-bottom:16px; }
+
+    /* Plan picker */
+    .plan-picker { display:flex; flex-direction:column; gap:8px; }
+    .plan-option { display:none; }
+    .plan-option:checked + .plan-label { border-color:var(--violet); background:rgba(124,58,237,.08); }
+    .plan-label {
+      display:flex; align-items:center; justify-content:space-between;
+      border:1px solid var(--border); border-radius:var(--radius); padding:10px 14px;
+      cursor:pointer; transition:border-color .12s, background .12s;
+    }
+    .plan-label:hover { border-color:#333; }
+    .plan-label-left { display:flex; flex-direction:column; gap:2px; }
+    .plan-label-name { font-size:13px; font-weight:500; }
+    .plan-label-desc { font-size:11px; color:var(--text3); }
+    .plan-label-price { font-size:13px; font-weight:600; color:var(--violet-l); }
+    .plan-label-price span { font-size:10px; font-weight:400; color:var(--text3); }
+  </style>
+</head>
+<body>
+<div class="auth-shell">
+  <div class="auth-card">
+    <div class="auth-logo">
+      <div class="auth-logo-icon">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+      </div>
+      <span class="auth-logo-text">BDX Hosting</span>
+    </div>
+
+    <h1 class="auth-heading">Create your account</h1>
+    <p class="auth-sub">Deploy your first server in minutes</p>
+
+    {% if error %}
+    <div class="auth-error">{{ error }}</div>
+    {% endif %}
+
+    <form class="auth-form" method="POST" action="{{ base }}/signup">
+      <div class="form-group">
+        <label>Username</label>
+        <input type="text" name="username" placeholder="yourname" required autocomplete="username" />
+      </div>
+      <div class="form-group">
+        <label>Email address</label>
+        <input type="email" name="email" placeholder="you@example.com" required autocomplete="email" />
+      </div>
+      <div class="form-group">
+        <label>Password</label>
+        <input type="password" name="password" placeholder="Min. 6 characters" required minlength="6" autocomplete="new-password" />
+      </div>
+
+      {% if plans %}
+      <div class="form-group">
+        <label>Choose a plan <span style="color:var(--text3)">(optional)</span></label>
+        <div class="plan-picker">
+          {% for plan in plans %}
+          <input class="plan-option" type="radio" name="plan_id" id="plan-{{ plan.id }}" value="{{ plan.id }}" {% if loop.first %}checked{% endif %}>
+          <label class="plan-label" for="plan-{{ plan.id }}">
+            <div class="plan-label-left">
+              <span class="plan-label-name">{{ plan.name }}</span>
+              <span class="plan-label-desc">{{ plan.max_slots }} slots · {{ plan.ram_mb }}MB RAM</span>
+            </div>
+            <span class="plan-label-price">
+              {% if plan.price_per_month == 0 %}Free{% else %}${{ plan.price_per_month | int }}<span>/mo</span>{% endif %}
+            </span>
+          </label>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+
+      <button type="submit" class="auth-submit">Create account</button>
+    </form>
+
+    <p class="auth-footer">Already have an account? <a href="{{ base }}/login">Sign in</a></p>
+  </div>
+</div>
+</body>
+</html>

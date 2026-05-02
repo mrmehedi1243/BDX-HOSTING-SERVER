@@ -10,23 +10,25 @@
 <div class="shell" id="shell">
   <!-- Sidebar -->
   <aside class="sidebar" id="sidebar">
+    <!-- Logo row -->
     <div class="logo">
       <div class="logo-icon" style="flex-shrink:0">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
       </div>
       <span class="logo-text" id="logo-text">BDX Hosting</span>
       <button class="sidebar-toggle" id="sidebar-toggle" title="Toggle sidebar" onclick="toggleSidebar()">
-        <svg id="toggle-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <line x1="3" y1="12" x2="21" y2="12"></line>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <line x1="3" y1="6" x2="21" y2="6"></line>
+          <line x1="3" y1="12" x2="21" y2="12"></line>
           <line x1="3" y1="18" x2="21" y2="18"></line>
         </svg>
       </button>
     </div>
 
+    <!-- Nav -->
     <nav>
       <div>
-        <div class="nav-section-label" id="lbl-platform">Platform</div>
+        <div class="nav-section-label">Platform</div>
         <div class="nav-links">
           <a href="{{ base }}/" class="nav-link {% if active == 'dashboard' %}active{% endif %}" data-tip="Dashboard">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
@@ -38,8 +40,10 @@
           </a>
         </div>
       </div>
+
+      {% if current_user and current_user.role == 'admin' %}
       <div>
-        <div class="nav-section-label" id="lbl-admin">Admin</div>
+        <div class="nav-section-label">Admin</div>
         <div class="nav-links">
           <a href="{{ base }}/admin/plans" class="nav-link {% if active == 'plans' %}active{% endif %}" data-tip="Plans">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>
@@ -55,25 +59,46 @@
           </a>
         </div>
       </div>
+      {% endif %}
     </nav>
 
-    <div class="plan-widget" id="plan-widget-wrap">
-      <div class="plan-card" id="plan-widget">
-        <div class="plan-card-top">
-          <div class="plan-name-row"><div class="plan-dot"></div><span id="pw-name">—</span></div>
-          <span class="plan-price" id="pw-price"></span>
+    <!-- Buy Server via Telegram -->
+    <div class="tg-buy-wrap" id="tg-buy-wrap">
+      <a href="https://t.me/proxaura" target="_blank" class="tg-buy-btn" data-tip="Buy Server">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" style="flex-shrink:0"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12l-6.871 4.326-2.962-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.833.941z"/></svg>
+        <span class="nav-label">Buy Server</span>
+        <span class="tg-tag nav-label">@proxaura</span>
+      </a>
+    </div>
+
+    <!-- User widget -->
+    <div class="user-widget" id="user-widget-wrap">
+      <div class="user-widget-card">
+        <div class="user-avatar" style="width:32px;height:32px;font-size:13px;flex-shrink:0">
+          {% if current_user %}{{ current_user.username[0].upper() }}{% else %}?{% endif %}
         </div>
-        <div class="plan-bar-row">
-          <div class="plan-bar-labels"><span>Slots</span><span id="pw-slots">—</span></div>
-          <div class="bar-track"><div class="bar-fill" id="pw-bar" style="width:0%"></div></div>
+        <div class="user-widget-info">
+          <div class="user-widget-name">{% if current_user %}{{ current_user.username }}{% endif %}</div>
+          <div class="user-widget-role">
+            <span class="role-badge {{ current_user.role if current_user else 'user' }}">
+              {{ current_user.role if current_user else '' }}
+            </span>
+          </div>
         </div>
-        <div class="plan-footer"><span id="pw-user">—</span><span id="pw-role">—</span></div>
+        <a href="{{ base }}/logout" class="logout-btn" title="Sign out" data-tip="Sign out">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+        </a>
       </div>
     </div>
 
-    <!-- Collapsed plan dot (icon-only mode) -->
-    <div class="plan-widget-mini" id="plan-widget-mini" style="display:none">
-      <div class="plan-dot" style="margin:0 auto"></div>
+    <!-- Collapsed bottom icons -->
+    <div class="collapsed-bottom" id="collapsed-bottom" style="display:none">
+      <a href="https://t.me/proxaura" target="_blank" class="nav-link" data-tip="Buy Server @proxaura" style="justify-content:center;padding:8px 0;color:#5ab3e8">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" style="flex-shrink:0"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12l-6.871 4.326-2.962-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.833.941z"/></svg>
+      </a>
+      <a href="{{ base }}/logout" class="nav-link" data-tip="Sign out" style="justify-content:center;padding:8px 0;color:var(--text3)">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+      </a>
     </div>
   </aside>
 
@@ -87,54 +112,45 @@
 
 <!-- Tooltip -->
 <div id="sidebar-tip"></div>
-
 <div id="toast"></div>
 
 <script>
 const BASE = "{{ base }}";
-const CURRENT_USER_ID = 2;
+const CURRENT_USER_ID = {{ current_user.id if current_user else 'null' }};
 
 /* ── Sidebar toggle ─────────────────────────────── */
 let collapsed = localStorage.getItem('sidebar-collapsed') === '1';
 
 function applySidebar(animate) {
-  const shell = document.getElementById('shell');
   const sidebar = document.getElementById('sidebar');
   const logoText = document.getElementById('logo-text');
   const labels = document.querySelectorAll('.nav-label');
   const sectionLabels = document.querySelectorAll('.nav-section-label');
-  const pw = document.getElementById('plan-widget-wrap');
-  const pwMini = document.getElementById('plan-widget-mini');
+  const uw = document.getElementById('user-widget-wrap');
+  const tgw = document.getElementById('tg-buy-wrap');
+  const cb = document.getElementById('collapsed-bottom');
 
   if (!animate) sidebar.style.transition = 'none';
 
   if (collapsed) {
-    shell.classList.add('sidebar-collapsed');
     sidebar.classList.add('collapsed');
-    logoText.style.opacity = '0';
-    logoText.style.width = '0';
-    logoText.style.overflow = 'hidden';
-    labels.forEach(l => { l.style.opacity = '0'; l.style.width = '0'; l.style.overflow = 'hidden'; });
+    logoText.style.opacity = '0'; logoText.style.width = '0'; logoText.style.overflow = 'hidden';
+    labels.forEach(l => { l.style.opacity = '0'; l.style.width = '0'; l.style.overflow = 'hidden'; l.style.whiteSpace = 'nowrap'; });
     sectionLabels.forEach(l => l.style.opacity = '0');
-    pw.style.display = 'none';
-    pwMini.style.display = 'flex';
+    if (uw) uw.style.display = 'none';
+    if (tgw) tgw.style.display = 'none';
+    if (cb) cb.style.display = 'flex';
   } else {
-    shell.classList.remove('sidebar-collapsed');
     sidebar.classList.remove('collapsed');
-    logoText.style.opacity = '1';
-    logoText.style.width = '';
-    logoText.style.overflow = '';
+    logoText.style.opacity = '1'; logoText.style.width = ''; logoText.style.overflow = '';
     labels.forEach(l => { l.style.opacity = '1'; l.style.width = ''; l.style.overflow = ''; });
     sectionLabels.forEach(l => l.style.opacity = '1');
-    pw.style.display = '';
-    pwMini.style.display = 'none';
+    if (uw) uw.style.display = '';
+    if (tgw) tgw.style.display = '';
+    if (cb) cb.style.display = 'none';
   }
 
-  if (!animate) {
-    // Force reflow then restore transition
-    sidebar.getBoundingClientRect();
-    sidebar.style.transition = '';
-  }
+  if (!animate) { sidebar.getBoundingClientRect(); sidebar.style.transition = ''; }
 }
 
 function toggleSidebar() {
@@ -142,13 +158,11 @@ function toggleSidebar() {
   localStorage.setItem('sidebar-collapsed', collapsed ? '1' : '0');
   applySidebar(true);
 }
-
-// Apply on load without animation
 applySidebar(false);
 
-/* ── Tooltip for collapsed nav links ────────────── */
+/* ── Tooltip ────────────────────────────────────── */
 const tip = document.getElementById('sidebar-tip');
-document.querySelectorAll('.nav-link[data-tip]').forEach(el => {
+document.querySelectorAll('[data-tip]').forEach(el => {
   el.addEventListener('mouseenter', e => {
     if (!collapsed) return;
     tip.textContent = el.dataset.tip;
@@ -163,40 +177,24 @@ document.querySelectorAll('.nav-link[data-tip]').forEach(el => {
 /* ── Toast ─────────────────────────────────────── */
 function toast(msg, duration = 2500) {
   const el = document.getElementById('toast');
-  el.textContent = msg;
-  el.classList.add('show');
+  el.textContent = msg; el.classList.add('show');
   setTimeout(() => el.classList.remove('show'), duration);
 }
 
-/* ── Fetch helper ──────────────────────────────── */
+/* ── API helper ────────────────────────────────── */
 async function api(path, opts = {}) {
   const res = await fetch(BASE + path, {
     headers: { 'Content-Type': 'application/json' },
     ...opts,
     body: opts.body ? JSON.stringify(opts.body) : undefined,
   });
+  if (res.status === 401) { window.location.href = BASE + '/login'; return; }
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.detail || 'Request failed');
   }
   return res.json();
 }
-
-/* ── Plan widget ───────────────────────────────── */
-async function loadPlanWidget() {
-  try {
-    const u = await api(`/api/users/${CURRENT_USER_ID}`);
-    document.getElementById('pw-name').textContent = u.plan_name || 'No Plan';
-    document.getElementById('pw-price').textContent = u.plan_name ? `$${u.price_per_month}/mo` : '';
-    const max = u.max_slots || 0;
-    const used = u.slots_used || 0;
-    document.getElementById('pw-slots').textContent = `${used} / ${max}`;
-    document.getElementById('pw-bar').style.width = max > 0 ? `${(used/max)*100}%` : '0%';
-    document.getElementById('pw-user').textContent = u.username || '';
-    document.getElementById('pw-role').textContent = u.role || '';
-  } catch(e) {}
-}
-loadPlanWidget();
 </script>
 {% block scripts %}{% endblock %}
 </body>

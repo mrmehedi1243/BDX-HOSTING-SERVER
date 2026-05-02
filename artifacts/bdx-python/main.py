@@ -1,9 +1,9 @@
 import os, asyncio, json, random
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
+from datetime import datetime
 
-from fastapi import FastAPI, Request, HTTPException
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi import FastAPI, Request, HTTPException, Form
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sse_starlette.sse import EventSourceResponse
@@ -11,12 +11,15 @@ from pydantic import BaseModel
 from typing import Optional
 
 import db
+import auth as Auth
 
 BASE = os.environ.get("BASE_PATH", "/python-panel").rstrip("/")
 PORT = int(os.environ.get("PORT", 5000))
 
 # SSE registry: server_id -> set of asyncio.Queue
 sse_clients: dict[int, set[asyncio.Queue]] = {}
+
+PUBLIC_PATHS = [f"{BASE}/login", f"{BASE}/signup", f"{BASE}/static"]
 
 async def broadcast_log(server_id: int, log: dict):
     if server_id in sse_clients:
@@ -45,14 +48,97 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
+# ── Auth middleware ───────────────────────────────────────────────────────────
+@app.middleware("http")
+async def session_middleware(request: Request, call_next):
+    token = request.cookies.get(Auth.COOKIE)
+    user = None
+    if token:
+        uid = Auth.read_token(token)
+        if uid:
+            user = await db.fetchone("SELECT * FROM users WHERE id=$1", uid)
+    request.state.user = user
+
+    path = request.url.path
+    is_public = any(path.startswith(p) for p in PUBLIC_PATHS) or path == f"{BASE}/login" or path == f"{BASE}/signup"
+
+    # Redirect to login if not authenticated (only for page routes, skip API/static)
+    if not is_public and user is None and not path.startswith(f"{BASE}/static"):
+        # Allow API routes to return 401 instead of redirect
+        if path.startswith(f"{BASE}/api/"):
+            return JSONResponse({"detail": "Not authenticated"}, status_code=401)
+        return RedirectResponse(f"{BASE}/login", status_code=302)
+
+    # Admin-only routes
+    if path.startswith(f"{BASE}/admin") and user and user.get("role") != "admin":
+        return RedirectResponse(f"{BASE}/", status_code=302)
+
+    return await call_next(request)
+
 templates = Jinja2Templates(directory=os.path.join(os.path.dirname(__file__), "templates"))
 app.mount(f"{BASE}/static", StaticFiles(directory=os.path.join(os.path.dirname(__file__), "static")), name="static")
 
-# ─── Template context helper ──────────────────────────────────────────────────
+# ── Template helper ───────────────────────────────────────────────────────────
 def tpl(request: Request, name: str, **kwargs):
     return templates.TemplateResponse(
-        request=request, name=name, context={"base": BASE, **kwargs}
+        request=request, name=name,
+        context={"base": BASE, "current_user": request.state.user, **kwargs}
     )
+
+# ══════════════════════════════════════════════════════════════════════════════
+# AUTH PAGES
+# ══════════════════════════════════════════════════════════════════════════════
+
+@app.get(f"{BASE}/login", response_class=HTMLResponse)
+async def page_login(request: Request):
+    if request.state.user:
+        return RedirectResponse(f"{BASE}/", status_code=302)
+    return tpl(request, "login.html")
+
+@app.post(f"{BASE}/login")
+async def do_login(request: Request, email: str = Form(...), password: str = Form(...)):
+    user = await db.fetchone("SELECT * FROM users WHERE email=$1", email)
+    if not user or not Auth.verify_password(password, user.get("password_hash", "")):
+        return tpl(request, "login.html", error="Invalid email or password.")
+    token = Auth.create_token(user["id"])
+    resp = RedirectResponse(f"{BASE}/", status_code=302)
+    resp.set_cookie(Auth.COOKIE, token, max_age=Auth.MAX_AGE, httponly=True, samesite="lax")
+    return resp
+
+@app.get(f"{BASE}/signup", response_class=HTMLResponse)
+async def page_signup(request: Request):
+    if request.state.user:
+        return RedirectResponse(f"{BASE}/", status_code=302)
+    plans = await db.fetchall("SELECT * FROM plans ORDER BY price_per_month")
+    return tpl(request, "signup.html", plans=plans)
+
+@app.post(f"{BASE}/signup")
+async def do_signup(
+    request: Request,
+    username: str = Form(...),
+    email: str = Form(...),
+    password: str = Form(...),
+    plan_id: Optional[int] = Form(None),
+):
+    existing = await db.fetchone("SELECT id FROM users WHERE email=$1", email)
+    if existing:
+        plans = await db.fetchall("SELECT * FROM plans ORDER BY price_per_month")
+        return tpl(request, "signup.html", plans=plans, error="An account with this email already exists.")
+    pw_hash = Auth.hash_password(password)
+    user = await db.fetchone(
+        "INSERT INTO users(username,email,role,password_hash,plan_id) VALUES($1,$2,'user',$3,$4) RETURNING *",
+        username, email, pw_hash, plan_id
+    )
+    token = Auth.create_token(user["id"])
+    resp = RedirectResponse(f"{BASE}/", status_code=302)
+    resp.set_cookie(Auth.COOKIE, token, max_age=Auth.MAX_AGE, httponly=True, samesite="lax")
+    return resp
+
+@app.get(f"{BASE}/logout")
+async def do_logout():
+    resp = RedirectResponse(f"{BASE}/login", status_code=302)
+    resp.delete_cookie(Auth.COOKIE)
+    return resp
 
 # ══════════════════════════════════════════════════════════════════════════════
 # HTML PAGES
@@ -61,11 +147,11 @@ def tpl(request: Request, name: str, **kwargs):
 @app.get(f"{BASE}/", response_class=HTMLResponse)
 @app.get(f"{BASE}", response_class=HTMLResponse)
 async def page_dashboard(request: Request):
-    return tpl(request, "index.html")
+    return tpl(request, "index.html", active="dashboard")
 
 @app.get(f"{BASE}/servers", response_class=HTMLResponse)
 async def page_servers(request: Request):
-    return tpl(request, "servers.html")
+    return tpl(request, "servers.html", active="servers")
 
 @app.get(f"{BASE}/console/{{server_id}}", response_class=HTMLResponse)
 async def page_console(request: Request, server_id: int):
@@ -73,19 +159,32 @@ async def page_console(request: Request, server_id: int):
 
 @app.get(f"{BASE}/admin/plans", response_class=HTMLResponse)
 async def page_plans(request: Request):
-    return tpl(request, "admin/plans.html")
+    return tpl(request, "admin/plans.html", active="plans")
 
 @app.get(f"{BASE}/admin/users", response_class=HTMLResponse)
 async def page_users(request: Request):
-    return tpl(request, "admin/users.html")
+    return tpl(request, "admin/users.html", active="users")
 
 @app.get(f"{BASE}/admin/servers", response_class=HTMLResponse)
 async def page_admin_servers(request: Request):
-    return tpl(request, "admin/servers.html")
+    return tpl(request, "admin/servers.html", active="allservers")
 
 # ══════════════════════════════════════════════════════════════════════════════
 # API — DASHBOARD
 # ══════════════════════════════════════════════════════════════════════════════
+
+@app.get(f"{BASE}/api/me")
+async def api_me(request: Request):
+    u = request.state.user
+    if not u:
+        raise HTTPException(401, "Not authenticated")
+    row = await db.fetchone("""
+        SELECT u.*, p.name as plan_name, p.max_slots, p.price_per_month,
+               (SELECT COUNT(*) FROM servers s WHERE s.user_id=u.id) as slots_used
+        FROM users u LEFT JOIN plans p ON u.plan_id=p.id
+        WHERE u.id=$1
+    """, u["id"])
+    return row_to_json(row)
 
 @app.get(f"{BASE}/api/stats")
 async def api_stats():
@@ -111,8 +210,12 @@ async def api_stats():
 # ══════════════════════════════════════════════════════════════════════════════
 
 @app.get(f"{BASE}/api/servers")
-async def api_list_servers(userId: Optional[int] = None):
-    if userId:
+async def api_list_servers(request: Request, userId: Optional[int] = None):
+    u = request.state.user
+    # non-admin users only see their own servers
+    if u and u.get("role") != "admin":
+        rows = await db.fetchall("SELECT * FROM servers WHERE user_id=$1 ORDER BY created_at DESC", u["id"])
+    elif userId:
         rows = await db.fetchall("SELECT * FROM servers WHERE user_id=$1 ORDER BY created_at DESC", userId)
     else:
         rows = await db.fetchall("SELECT * FROM servers ORDER BY created_at DESC")
@@ -272,7 +375,8 @@ async def api_delete_plan(plan_id: int):
 @app.get(f"{BASE}/api/users")
 async def api_list_users():
     rows = await db.fetchall("""
-        SELECT u.*, p.name as plan_name, p.max_slots, p.price_per_month,
+        SELECT u.id, u.username, u.email, u.role, u.plan_id, u.created_at,
+               p.name as plan_name, p.max_slots, p.price_per_month,
                (SELECT COUNT(*) FROM servers s WHERE s.user_id=u.id) as slots_used,
                (SELECT COUNT(*) FROM servers s WHERE s.user_id=u.id AND s.status='running') as slots_running
         FROM users u LEFT JOIN plans p ON u.plan_id=p.id
@@ -283,7 +387,8 @@ async def api_list_users():
 @app.get(f"{BASE}/api/users/{{user_id}}")
 async def api_get_user(user_id: int):
     row = await db.fetchone("""
-        SELECT u.*, p.name as plan_name, p.max_slots, p.price_per_month,
+        SELECT u.id, u.username, u.email, u.role, u.plan_id, u.created_at,
+               p.name as plan_name, p.max_slots, p.price_per_month,
                (SELECT COUNT(*) FROM servers s WHERE s.user_id=u.id) as slots_used
         FROM users u LEFT JOIN plans p ON u.plan_id=p.id
         WHERE u.id=$1
@@ -299,7 +404,7 @@ class UserUpdateBody(BaseModel):
 @app.put(f"{BASE}/api/users/{{user_id}}")
 async def api_update_user(user_id: int, body: UserUpdateBody):
     row = await db.fetchone(
-        "UPDATE users SET plan_id=$2, role=COALESCE($3,role) WHERE id=$1 RETURNING *",
+        "UPDATE users SET plan_id=$2, role=COALESCE($3::user_role,role) WHERE id=$1 RETURNING id,username,email,role,plan_id",
         user_id, body.planId, body.role
     )
     if not row:
