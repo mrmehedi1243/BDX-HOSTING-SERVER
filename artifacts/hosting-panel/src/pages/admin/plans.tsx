@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { 
-  useListPlans, 
+import {
+  useListPlans,
   getListPlansQueryKey,
   useCreatePlan,
   useUpdatePlan,
@@ -8,279 +8,271 @@ import {
 } from "@workspace/api-client-react";
 import type { Plan } from "@/types";
 import { useQueryClient } from "@tanstack/react-query";
-import { Card, CardContent, CardHeader, CardTitle, CardFooter, CardDescription } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Edit2, Trash2, Box, Cpu, HardDrive, Server } from "lucide-react";
+import { Plus, Pencil, Trash2, Server, HardDrive, Cpu, DollarSign } from "lucide-react";
 import { motion } from "framer-motion";
+
+interface PlanForm {
+  name: string;
+  maxSlots: number;
+  pricePerMonth: number;
+  ramMB: number;
+  cpuPercent: number;
+  description: string;
+}
+
+const emptyForm: PlanForm = { name: "", maxSlots: 1, pricePerMonth: 0, ramMB: 512, cpuPercent: 25, description: "" };
+
+function PlanFormFields({ form, setForm }: { form: PlanForm; setForm: (f: PlanForm) => void }) {
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 gap-3">
+        <div className="col-span-2 space-y-1.5">
+          <Label className="text-xs text-zinc-400">Plan Name</Label>
+          <Input
+            value={form.name}
+            onChange={(e) => setForm({ ...form, name: e.target.value })}
+            placeholder="Pro"
+            className="bg-[#0a0a0a] border-[#1e1e1e] text-white"
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label className="text-xs text-zinc-400">Price / month ($)</Label>
+          <Input
+            type="number"
+            value={form.pricePerMonth}
+            onChange={(e) => setForm({ ...form, pricePerMonth: Number(e.target.value) })}
+            className="bg-[#0a0a0a] border-[#1e1e1e] text-white"
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label className="text-xs text-zinc-400">Max Slots</Label>
+          <Input
+            type="number"
+            value={form.maxSlots}
+            onChange={(e) => setForm({ ...form, maxSlots: Number(e.target.value) })}
+            className="bg-[#0a0a0a] border-[#1e1e1e] text-white"
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label className="text-xs text-zinc-400">RAM (MB)</Label>
+          <Input
+            type="number"
+            value={form.ramMB}
+            onChange={(e) => setForm({ ...form, ramMB: Number(e.target.value) })}
+            className="bg-[#0a0a0a] border-[#1e1e1e] text-white"
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label className="text-xs text-zinc-400">CPU Limit (%)</Label>
+          <Input
+            type="number"
+            value={form.cpuPercent}
+            onChange={(e) => setForm({ ...form, cpuPercent: Number(e.target.value) })}
+            className="bg-[#0a0a0a] border-[#1e1e1e] text-white"
+          />
+        </div>
+        <div className="col-span-2 space-y-1.5">
+          <Label className="text-xs text-zinc-400">Description</Label>
+          <Input
+            value={form.description}
+            onChange={(e) => setForm({ ...form, description: e.target.value })}
+            placeholder="Short description..."
+            className="bg-[#0a0a0a] border-[#1e1e1e] text-white"
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function AdminPlans() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  
-  const { data: plans, isLoading } = useListPlans({
-    query: {
-      queryKey: getListPlansQueryKey()
-    }
-  });
+
+  const { data: plans, isLoading } = useListPlans({ query: { queryKey: getListPlansQueryKey() } });
 
   const createPlan = useCreatePlan();
   const updatePlan = useUpdatePlan();
   const deletePlan = useDeletePlan();
 
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [editingPlan, setEditingPlan] = useState<Plan | null>(null);
-  
-  const [formData, setFormData] = useState({
-    name: "",
-    maxSlots: "1",
-    pricePerMonth: "0",
-    ramMB: "1024",
-    cpuPercent: "100",
-    description: ""
-  });
+  const [createOpen, setCreateOpen] = useState(false);
+  const [editPlan, setEditPlan] = useState<Plan | null>(null);
+  const [createForm, setCreateForm] = useState<PlanForm>(emptyForm);
+  const [editForm, setEditForm] = useState<PlanForm>(emptyForm);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
 
-  const handleOpenDialog = (plan?: Plan) => {
-    if (plan) {
-      setEditingPlan(plan);
-      setFormData({
-        name: plan.name,
-        maxSlots: plan.maxSlots.toString(),
-        pricePerMonth: plan.pricePerMonth.toString(),
-        ramMB: plan.ramMB.toString(),
-        cpuPercent: plan.cpuPercent.toString(),
-        description: plan.description || ""
-      });
-    } else {
-      setEditingPlan(null);
-      setFormData({
-        name: "",
-        maxSlots: "1",
-        pricePerMonth: "0",
-        ramMB: "1024",
-        cpuPercent: "100",
-        description: ""
-      });
+  const handleCreate = async () => {
+    if (!createForm.name.trim()) return;
+    try {
+      await createPlan.mutateAsync({ data: createForm });
+      queryClient.invalidateQueries({ queryKey: getListPlansQueryKey() });
+      setCreateForm(emptyForm);
+      setCreateOpen(false);
+      toast({ title: "Plan created" });
+    } catch {
+      toast({ title: "Failed to create plan", variant: "destructive" });
     }
-    setDialogOpen(true);
   };
 
-  const handleSubmit = async () => {
+  const handleEdit = async () => {
+    if (!editPlan) return;
     try {
-      const payload = {
-        name: formData.name,
-        maxSlots: parseInt(formData.maxSlots, 10),
-        pricePerMonth: parseFloat(formData.pricePerMonth),
-        ramMB: parseInt(formData.ramMB, 10),
-        cpuPercent: parseInt(formData.cpuPercent, 10),
-        description: formData.description
-      };
-
-      if (editingPlan) {
-        await updatePlan.mutateAsync({ id: editingPlan.id, data: payload });
-        toast({ title: "Plan updated successfully" });
-      } else {
-        await createPlan.mutateAsync({ data: payload });
-        toast({ title: "Plan created successfully" });
-      }
-      
+      await updatePlan.mutateAsync({ id: editPlan.id, data: editForm });
       queryClient.invalidateQueries({ queryKey: getListPlansQueryKey() });
-      setDialogOpen(false);
-    } catch (error) {
-      toast({ title: "Error saving plan", variant: "destructive" });
+      setEditPlan(null);
+      toast({ title: "Plan updated" });
+    } catch {
+      toast({ title: "Failed to update plan", variant: "destructive" });
     }
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm("Are you sure you want to delete this plan?")) return;
+    if (!confirm("Delete this plan?")) return;
+    setDeletingId(id);
     try {
       await deletePlan.mutateAsync({ id });
       queryClient.invalidateQueries({ queryKey: getListPlansQueryKey() });
-      toast({ title: "Plan deleted successfully" });
-    } catch (error) {
-      toast({ title: "Error deleting plan", variant: "destructive" });
+      toast({ title: "Plan deleted" });
+    } catch {
+      toast({ title: "Failed to delete plan", variant: "destructive" });
+    } finally {
+      setDeletingId(null);
     }
-  };
-
-  const container = {
-    hidden: { opacity: 0 },
-    show: {
-      opacity: 1,
-      transition: { staggerChildren: 0.1 }
-    }
-  };
-
-  const item = {
-    hidden: { opacity: 0, y: 10 },
-    show: { opacity: 1, y: 0 }
   };
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Hosting Plans</h1>
-          <p className="text-muted-foreground mt-2">Manage available plans and resource allocations.</p>
+          <h1 className="text-2xl font-semibold text-white tracking-tight">Hosting Plans</h1>
+          <p className="text-sm text-zinc-500 mt-1">Manage available plans and resource allocations.</p>
         </div>
-        <Button onClick={() => handleOpenDialog()}>
-          <Plus className="w-4 h-4 mr-2" />
-          Create Plan
-        </Button>
+        <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+          <DialogTrigger asChild>
+            <button className="flex items-center gap-1.5 text-xs font-medium text-white bg-violet-600 hover:bg-violet-700 rounded-md px-3 h-8 transition-colors">
+              <Plus className="w-3.5 h-3.5" /> New Plan
+            </button>
+          </DialogTrigger>
+          <DialogContent className="bg-[#111] border-[#1e1e1e]">
+            <DialogHeader>
+              <DialogTitle className="text-white text-sm">Create Plan</DialogTitle>
+            </DialogHeader>
+            <PlanFormFields form={createForm} setForm={setCreateForm} />
+            <button
+              className="w-full h-9 text-sm font-medium text-white bg-violet-600 hover:bg-violet-700 rounded-md transition-colors mt-2 disabled:opacity-50"
+              onClick={handleCreate}
+              disabled={!createForm.name.trim() || createPlan.isPending}
+            >
+              Create
+            </button>
+          </DialogContent>
+        </Dialog>
       </div>
 
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle>{editingPlan ? "Edit Plan" : "Create New Plan"}</DialogTitle>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid gap-2">
-              <Label htmlFor="name">Name</Label>
-              <Input 
-                id="name" 
-                value={formData.name} 
-                onChange={e => setFormData({...formData, name: e.target.value})} 
-                placeholder="e.g. Starter Plan"
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="grid gap-2">
-                <Label htmlFor="price">Price/Mo ($)</Label>
-                <Input 
-                  id="price" 
-                  type="number" 
-                  step="0.01" 
-                  value={formData.pricePerMonth} 
-                  onChange={e => setFormData({...formData, pricePerMonth: e.target.value})} 
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="slots">Max Slots</Label>
-                <Input 
-                  id="slots" 
-                  type="number" 
-                  value={formData.maxSlots} 
-                  onChange={e => setFormData({...formData, maxSlots: e.target.value})} 
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="grid gap-2">
-                <Label htmlFor="ram">RAM (MB)</Label>
-                <Input 
-                  id="ram" 
-                  type="number" 
-                  value={formData.ramMB} 
-                  onChange={e => setFormData({...formData, ramMB: e.target.value})} 
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="cpu">CPU (%)</Label>
-                <Input 
-                  id="cpu" 
-                  type="number" 
-                  value={formData.cpuPercent} 
-                  onChange={e => setFormData({...formData, cpuPercent: e.target.value})} 
-                />
-              </div>
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="description">Description</Label>
-              <Textarea 
-                id="description" 
-                value={formData.description} 
-                onChange={e => setFormData({...formData, description: e.target.value})} 
-                placeholder="Brief plan description"
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleSubmit} disabled={createPlan.isPending || updatePlan.isPending}>
-              {editingPlan ? "Save Changes" : "Create Plan"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
       {isLoading ? (
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {[...Array(3)].map((_, i) => (
-            <Card key={i}>
-              <CardHeader>
-                <Skeleton className="h-6 w-32 mb-2" />
-                <Skeleton className="h-4 w-full" />
-              </CardHeader>
-              <CardContent>
-                <Skeleton className="h-20 w-full" />
-              </CardContent>
-            </Card>
+        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+          {[...Array(4)].map((_, i) => (
+            <div key={i} className="rounded-lg border border-[#1e1e1e] bg-[#0f0f0f] p-5 space-y-4">
+              <Skeleton className="h-5 w-24 bg-white/5" />
+              <Skeleton className="h-8 w-20 bg-white/5" />
+              <div className="space-y-2">
+                <Skeleton className="h-3 w-full bg-white/5" />
+                <Skeleton className="h-3 w-3/4 bg-white/5" />
+              </div>
+            </div>
           ))}
-        </div>
-      ) : plans?.length === 0 ? (
-        <div className="text-center py-12 bg-card rounded-lg border border-border border-dashed">
-          <Box className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-foreground mb-1">No plans found</h3>
-          <p className="text-muted-foreground">Create a hosting plan to get started.</p>
         </div>
       ) : (
-        <motion.div 
-          className="grid gap-6 md:grid-cols-2 lg:grid-cols-3"
-          variants={container}
-          initial="hidden"
-          animate="show"
-        >
-          {plans?.map((plan) => (
-            <motion.div key={plan.id} variants={item}>
-              <Card className="flex flex-col h-full bg-card border-border hover:border-primary/30 transition-colors">
-                <CardHeader>
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <CardTitle className="text-xl">{plan.name}</CardTitle>
-                      <CardDescription className="mt-1.5 text-2xl font-bold text-foreground">
-                        ${plan.pricePerMonth} <span className="text-sm font-normal text-muted-foreground">/mo</span>
-                      </CardDescription>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent className="flex-1 space-y-4">
+        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+          {plans?.map((plan, i) => (
+            <motion.div
+              key={plan.id}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.25, delay: i * 0.05 }}
+              className="group rounded-lg border border-[#1e1e1e] bg-[#0f0f0f] p-5 flex flex-col gap-4 hover:border-[#2e2e2e] transition-colors"
+            >
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-xs text-zinc-500 font-medium uppercase tracking-wide mb-1">Plan</p>
+                  <h3 className="text-base font-semibold text-white">{plan.name}</h3>
                   {plan.description && (
-                    <p className="text-sm text-muted-foreground">{plan.description}</p>
+                    <p className="text-[11px] text-zinc-600 mt-0.5">{plan.description}</p>
                   )}
-                  <div className="space-y-3 pt-2">
-                    <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                      <Server className="w-4 h-4 text-primary" />
-                      <span>{plan.maxSlots} Server Slots</span>
-                    </div>
-                    <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                      <HardDrive className="w-4 h-4 text-primary" />
-                      <span>{(plan.ramMB / 1024).toFixed(1)} GB RAM per slot</span>
-                    </div>
-                    <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                      <Cpu className="w-4 h-4 text-primary" />
-                      <span>{plan.cpuPercent}% CPU limit</span>
-                    </div>
-                  </div>
-                </CardContent>
-                <CardFooter className="pt-4 border-t border-border/50 gap-2">
-                  <Button variant="outline" className="flex-1" onClick={() => handleOpenDialog(plan)}>
-                    <Edit2 className="w-4 h-4 mr-2" />
-                    Edit
-                  </Button>
-                  <Button variant="destructive" className="flex-none" onClick={() => handleDelete(plan.id)} disabled={deletePlan.isPending}>
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
-                </CardFooter>
-              </Card>
+                </div>
+                <div className="text-right">
+                  <span className="text-2xl font-semibold text-white">${plan.pricePerMonth}</span>
+                  <span className="text-xs text-zinc-600">/mo</span>
+                </div>
+              </div>
+
+              <div className="space-y-2 text-[12px] text-zinc-500">
+                <div className="flex items-center gap-2">
+                  <Server className="w-3.5 h-3.5 text-violet-400" />
+                  <span>{plan.maxSlots} server slot{plan.maxSlots !== 1 ? "s" : ""}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <HardDrive className="w-3.5 h-3.5 text-blue-400" />
+                  <span>{(plan.ramMB / 1024).toFixed(1)} GB RAM per slot</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Cpu className="w-3.5 h-3.5 text-cyan-400" />
+                  <span>{plan.cpuPercent}% CPU limit</span>
+                </div>
+              </div>
+
+              <div className="flex gap-2 pt-2 border-t border-[#1a1a1a]">
+                <button
+                  className="flex-1 flex items-center justify-center gap-1.5 text-xs font-medium text-zinc-400 bg-white/4 hover:bg-white/7 border border-white/6 rounded-md h-8 transition-colors"
+                  onClick={() => {
+                    setEditPlan(plan as Plan);
+                    setEditForm({
+                      name: plan.name,
+                      maxSlots: plan.maxSlots,
+                      pricePerMonth: plan.pricePerMonth,
+                      ramMB: plan.ramMB,
+                      cpuPercent: plan.cpuPercent,
+                      description: plan.description ?? "",
+                    });
+                  }}
+                >
+                  <Pencil className="w-3 h-3" /> Edit
+                </button>
+                <button
+                  className="flex items-center justify-center gap-1.5 text-xs font-medium text-red-400 bg-red-500/8 hover:bg-red-500/14 border border-red-500/15 rounded-md px-3 h-8 transition-colors disabled:opacity-50"
+                  onClick={() => handleDelete(plan.id)}
+                  disabled={deletingId === plan.id}
+                >
+                  <Trash2 className="w-3 h-3" />
+                </button>
+              </div>
             </motion.div>
           ))}
-        </motion.div>
+        </div>
       )}
+
+      {/* Edit Dialog */}
+      <Dialog open={!!editPlan} onOpenChange={(o) => !o && setEditPlan(null)}>
+        <DialogContent className="bg-[#111] border-[#1e1e1e]">
+          <DialogHeader>
+            <DialogTitle className="text-white text-sm">Edit Plan</DialogTitle>
+          </DialogHeader>
+          <PlanFormFields form={editForm} setForm={setEditForm} />
+          <button
+            className="w-full h-9 text-sm font-medium text-white bg-violet-600 hover:bg-violet-700 rounded-md transition-colors mt-2 disabled:opacity-50"
+            onClick={handleEdit}
+            disabled={!editForm.name.trim() || updatePlan.isPending}
+          >
+            Save Changes
+          </button>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

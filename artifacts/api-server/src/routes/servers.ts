@@ -1,6 +1,6 @@
-import { Router } from "express";
+import { Router, Response } from "express";
 import { db, serversTable, usersTable, plansTable, consoleLogsTable } from "@workspace/db";
-import { eq, desc, and } from "drizzle-orm";
+import { eq, desc } from "drizzle-orm";
 import {
   CreateServerBody,
   UpdateServerStatusBody,
@@ -16,6 +16,26 @@ import {
 } from "@workspace/api-zod";
 
 const router = Router();
+
+// SSE broadcast registry: serverId -> set of connected Response objects
+const sseClients = new Map<number, Set<Response>>();
+
+function broadcastLog(serverId: number, log: { id: number; serverId: number; message: string; level: string; timestamp: Date | string }) {
+  const clients = sseClients.get(serverId);
+  if (!clients) return;
+  const data = JSON.stringify({
+    id: log.id,
+    serverId: log.serverId,
+    message: log.message,
+    level: log.level,
+    timestamp: log.timestamp instanceof Date ? log.timestamp.toISOString() : log.timestamp,
+  });
+  for (const client of clients) {
+    try {
+      client.write(`data: ${data}\n\n`);
+    } catch {}
+  }
+}
 
 function randomInRange(min: number, max: number) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
@@ -77,11 +97,12 @@ router.post("/servers", async (req, res) => {
       })
       .returning();
 
-    await db.insert(consoleLogsTable).values({
+    const [log] = await db.insert(consoleLogsTable).values({
       serverId: server.id,
       message: `Server "${server.name}" created successfully.`,
       level: "info",
-    });
+    }).returning();
+    broadcastLog(server.id, log);
 
     res.status(201).json({ ...server, startedAt: null });
   } catch (err) {
@@ -128,7 +149,6 @@ router.put("/servers/:id/status", async (req, res) => {
     if (!existing) { res.status(404).json({ message: "Server not found" }); return; }
 
     const isStarting = body.data.status === "running";
-    const newStatus = isStarting ? "starting" : "stopped";
 
     const [server] = await db
       .update(serversTable)
@@ -137,25 +157,26 @@ router.put("/servers/:id/status", async (req, res) => {
         startedAt: isStarting ? new Date() : null,
         ramUsedMB: isStarting ? randomInRange(128, 480) : 0,
         cpuUsed: isStarting ? randomInRange(5, 40) : 0,
-        uptime: isStarting ? 0 : 0,
+        uptime: 0,
       })
       .where(eq(serversTable.id, params.data.id))
       .returning();
 
-    await db.insert(consoleLogsTable).values({
-      serverId: params.data.id,
-      message: isStarting
-        ? `[INFO] Server starting... Binding to port ${randomInRange(3000, 9999)}`
-        : `[INFO] Server stopped gracefully.`,
-      level: "info",
-    });
+    const port = randomInRange(3000, 9999);
+    const bootLogs = isStarting
+      ? [
+          { serverId: params.data.id, message: `▶ Initializing process runner...`, level: "info" as const },
+          { serverId: params.data.id, message: `✓ Environment variables loaded (${randomInRange(8, 24)} vars)`, level: "info" as const },
+          { serverId: params.data.id, message: `✓ Network interface bound to 0.0.0.0:${port}`, level: "info" as const },
+          { serverId: params.data.id, message: `✓ Server "${existing.name}" is now running`, level: "info" as const },
+        ]
+      : [
+          { serverId: params.data.id, message: `⏹ SIGTERM received — draining connections...`, level: "warn" as const },
+          { serverId: params.data.id, message: `✓ Server "${existing.name}" stopped gracefully`, level: "info" as const },
+        ];
 
-    if (isStarting) {
-      await db.insert(consoleLogsTable).values([
-        { serverId: params.data.id, message: `[INFO] Loading environment variables...`, level: "info" },
-        { serverId: params.data.id, message: `[INFO] Server is now running.`, level: "info" },
-      ]);
-    }
+    const inserted = await db.insert(consoleLogsTable).values(bootLogs).returning();
+    for (const log of inserted) broadcastLog(params.data.id, log);
 
     res.json({ ...server, startedAt: server.startedAt?.toISOString() ?? null });
   } catch (err) {
@@ -168,7 +189,7 @@ router.get("/servers/:id/logs", async (req, res) => {
   const params = GetServerLogsParams.safeParse({ id: Number(req.params.id) });
   const query = GetServerLogsQueryParams.safeParse(req.query);
   if (!params.success) { res.status(400).json({ message: "Invalid server id" }); return; }
-  const limit = query.success ? (query.data.limit ?? 100) : 100;
+  const limit = query.success ? (query.data.limit ?? 200) : 200;
   try {
     const logs = await db
       .select()
@@ -176,11 +197,37 @@ router.get("/servers/:id/logs", async (req, res) => {
       .where(eq(consoleLogsTable.serverId, params.data.id))
       .orderBy(desc(consoleLogsTable.timestamp))
       .limit(limit);
-    res.json(logs.reverse());
+    res.json(logs.reverse().map(l => ({ ...l, timestamp: l.timestamp.toISOString() })));
   } catch (err) {
     req.log.error(err);
     res.status(500).json({ message: "Failed to fetch logs" });
   }
+});
+
+// SSE stream endpoint for real-time logs
+router.get("/servers/:id/logs/stream", async (req, res) => {
+  const id = Number(req.params.id);
+  if (isNaN(id)) { res.status(400).json({ message: "Invalid server id" }); return; }
+
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+  res.setHeader("X-Accel-Buffering", "no");
+  res.flushHeaders();
+
+  // Send heartbeat comment every 15s to keep connection alive
+  const heartbeat = setInterval(() => {
+    try { res.write(": heartbeat\n\n"); } catch {}
+  }, 15000);
+
+  if (!sseClients.has(id)) sseClients.set(id, new Set());
+  sseClients.get(id)!.add(res);
+
+  req.on("close", () => {
+    clearInterval(heartbeat);
+    sseClients.get(id)?.delete(res);
+    if (sseClients.get(id)?.size === 0) sseClients.delete(id);
+  });
 });
 
 router.post("/servers/:id/logs", async (req, res) => {
@@ -195,7 +242,8 @@ router.post("/servers/:id/logs", async (req, res) => {
       .insert(consoleLogsTable)
       .values({ serverId: params.data.id, message: body.data.message, level: body.data.level })
       .returning();
-    res.status(201).json(log);
+    broadcastLog(params.data.id, { ...log, timestamp: log.timestamp.toISOString() });
+    res.status(201).json({ ...log, timestamp: log.timestamp.toISOString() });
   } catch (err) {
     req.log.error(err);
     res.status(500).json({ message: "Failed to add log" });

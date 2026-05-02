@@ -1,194 +1,209 @@
 import { useState } from "react";
 import { Link } from "wouter";
-import { 
-  useListServers, 
+import {
+  useListServers,
   getListServersQueryKey,
   useUpdateServerStatus,
 } from "@workspace/api-client-react";
 import type { Server } from "@/types";
 import { useQueryClient } from "@tanstack/react-query";
-import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Play, Square, Terminal, Loader2, Server as ServerIcon } from "lucide-react";
+import { Play, Square, Terminal, Loader2, Server as ServerIcon, Cpu, HardDrive, Clock } from "lucide-react";
 import { motion } from "framer-motion";
 import { useToast } from "@/hooks/use-toast";
 
-const CURRENT_USER_ID = 2; // Hardcoded user context
+const CURRENT_USER_ID = 2;
+
+function StatusDot({ status }: { status: string }) {
+  const colors: Record<string, string> = {
+    running: "bg-emerald-400",
+    stopped: "bg-zinc-600",
+    error: "bg-red-400",
+    starting: "bg-amber-400",
+  };
+  return (
+    <span className="relative flex h-2 w-2">
+      {status === "running" && (
+        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-60" />
+      )}
+      <span className={`relative inline-flex rounded-full h-2 w-2 ${colors[status] ?? "bg-zinc-600"}`} />
+    </span>
+  );
+}
+
+function formatUptime(seconds: number) {
+  if (seconds === 0) return "—";
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  if (h > 0) return `${h}h ${m}m`;
+  return `${m}m`;
+}
+
+function MiniBar({ value, color = "bg-violet-500" }: { value: number; color?: string }) {
+  return (
+    <div className="h-1 rounded-full bg-white/5 overflow-hidden">
+      <div
+        className={`h-full rounded-full ${color} transition-all duration-700`}
+        style={{ width: `${Math.min(100, value)}%` }}
+      />
+    </div>
+  );
+}
 
 export default function Servers() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { data: servers, isLoading } = useListServers(
     { userId: CURRENT_USER_ID },
-    {
-      query: {
-        queryKey: getListServersQueryKey({ userId: CURRENT_USER_ID })
-      }
-    }
+    { query: { queryKey: getListServersQueryKey({ userId: CURRENT_USER_ID }) } }
   );
 
   const updateStatus = useUpdateServerStatus();
   const [loadingServer, setLoadingServer] = useState<number | null>(null);
 
-  const handleStatusChange = async (server: Server, newStatus: 'running' | 'stopped') => {
+  const handleStatusChange = async (server: Server, newStatus: "running" | "stopped") => {
     setLoadingServer(server.id);
     try {
-      await updateStatus.mutateAsync({
-        id: server.id,
-        data: { status: newStatus }
-      });
+      await updateStatus.mutateAsync({ id: server.id, data: { status: newStatus } });
       queryClient.invalidateQueries({ queryKey: getListServersQueryKey({ userId: CURRENT_USER_ID }) });
-      toast({
-        title: "Status updated",
-        description: `Server ${server.name} is now ${newStatus}.`,
-      });
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to update server status.",
-        variant: "destructive"
-      });
+      toast({ title: `Server ${newStatus === "running" ? "started" : "stopped"}`, description: server.name });
+    } catch {
+      toast({ title: "Failed to update server", variant: "destructive" });
     } finally {
       setLoadingServer(null);
     }
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'running': return "bg-emerald-500/10 text-emerald-500 border-emerald-500/20";
-      case 'error': return "bg-destructive/10 text-destructive border-destructive/20";
-      case 'starting': return "bg-yellow-500/10 text-yellow-500 border-yellow-500/20";
-      default: return "bg-muted text-muted-foreground border-border";
-    }
-  };
-
-  const container = {
-    hidden: { opacity: 0 },
-    show: {
-      opacity: 1,
-      transition: { staggerChildren: 0.05 }
-    }
-  };
-
-  const item = {
-    hidden: { opacity: 0, y: 10 },
-    show: { opacity: 1, y: 0 }
-  };
-
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">My Servers</h1>
-          <p className="text-muted-foreground mt-2">Manage your deployed server slots.</p>
-        </div>
+      <div>
+        <h1 className="text-2xl font-semibold text-white tracking-tight">My Servers</h1>
+        <p className="text-sm text-zinc-500 mt-1">Manage your deployed server slots.</p>
       </div>
 
       {isLoading ? (
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
           {[...Array(3)].map((_, i) => (
-            <Card key={i}>
-              <CardHeader>
-                <Skeleton className="h-6 w-32" />
-                <Skeleton className="h-4 w-20" />
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Skeleton className="h-4 w-full" />
-                  <Skeleton className="h-2 w-full" />
-                </div>
-                <div className="space-y-2">
-                  <Skeleton className="h-4 w-full" />
-                  <Skeleton className="h-2 w-full" />
-                </div>
-              </CardContent>
-              <CardFooter className="gap-2">
-                <Skeleton className="h-9 w-24" />
-                <Skeleton className="h-9 w-24" />
-              </CardFooter>
-            </Card>
+            <div key={i} className="rounded-lg border border-[#1e1e1e] bg-[#0f0f0f] p-5 space-y-4">
+              <div className="flex items-center justify-between">
+                <Skeleton className="h-4 w-28 bg-white/5" />
+                <Skeleton className="h-3 w-14 bg-white/5" />
+              </div>
+              <div className="space-y-3">
+                <Skeleton className="h-1 w-full bg-white/5" />
+                <Skeleton className="h-1 w-full bg-white/5" />
+              </div>
+              <div className="flex gap-2">
+                <Skeleton className="h-8 flex-1 bg-white/5" />
+                <Skeleton className="h-8 flex-1 bg-white/5" />
+              </div>
+            </div>
           ))}
         </div>
       ) : servers?.length === 0 ? (
-        <div className="text-center py-12 bg-card rounded-lg border border-border border-dashed">
-          <Server className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-foreground mb-1">No servers deployed</h3>
-          <p className="text-muted-foreground">You don't have any server slots running right now.</p>
+        <div className="flex flex-col items-center justify-center py-24 rounded-lg border border-dashed border-[#1e1e1e]">
+          <ServerIcon className="w-10 h-10 text-zinc-700 mb-4" />
+          <p className="text-sm font-medium text-zinc-400">No servers deployed</p>
+          <p className="text-xs text-zinc-600 mt-1">You don't have any server slots yet.</p>
         </div>
       ) : (
-        <motion.div 
-          className="grid gap-6 md:grid-cols-2 lg:grid-cols-3"
-          variants={container}
-          initial="hidden"
-          animate="show"
-        >
-          {servers?.map((server) => (
-            <motion.div key={server.id} variants={item}>
-              <Card className="flex flex-col h-full bg-card border-border hover:border-primary/50 transition-colors">
-                <CardHeader className="flex flex-row items-start justify-between pb-4">
-                  <div className="space-y-1">
-                    <CardTitle className="text-xl">{server.name}</CardTitle>
-                    <div className="text-xs text-muted-foreground">Uptime: {Math.floor(server.uptime / 3600)}h {Math.floor((server.uptime % 3600) / 60)}m</div>
+        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+          {servers?.map((server, i) => (
+            <motion.div
+              key={server.id}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.25, delay: i * 0.05 }}
+              className="group rounded-lg border border-[#1e1e1e] bg-[#0f0f0f] p-5 flex flex-col gap-4 hover:border-[#2e2e2e] transition-colors"
+            >
+              {/* Header */}
+              <div className="flex items-start justify-between">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <StatusDot status={server.status} />
+                    <span className="text-sm font-semibold text-white">{server.name}</span>
                   </div>
-                  <Badge variant="outline" className={`${getStatusColor(server.status)} capitalize`}>
-                    {server.status}
-                  </Badge>
-                </CardHeader>
-                
-                <CardContent className="space-y-6 flex-1">
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Memory</span>
-                      <span className="font-medium">{server.ramUsedMB} MB</span>
-                    </div>
-                    <Progress value={Math.min(100, (server.ramUsedMB / 2048) * 100)} className="h-2 bg-muted/50" />
+                  <div className="flex items-center gap-1 mt-1 ml-4">
+                    <Clock className="w-3 h-3 text-zinc-600" />
+                    <span className="text-[11px] text-zinc-600">{formatUptime(server.uptime)}</span>
                   </div>
-                  
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">CPU</span>
-                      <span className="font-medium">{server.cpuUsed}%</span>
-                    </div>
-                    <Progress value={server.cpuUsed} className="h-2 bg-muted/50" />
-                  </div>
-                </CardContent>
+                </div>
+                <span
+                  className={`text-[10px] font-medium px-2 py-0.5 rounded-full capitalize ${
+                    server.status === "running"
+                      ? "bg-emerald-500/10 text-emerald-400"
+                      : server.status === "error"
+                      ? "bg-red-500/10 text-red-400"
+                      : server.status === "starting"
+                      ? "bg-amber-500/10 text-amber-400"
+                      : "bg-white/5 text-zinc-500"
+                  }`}
+                >
+                  {server.status}
+                </span>
+              </div>
 
-                <CardFooter className="pt-4 border-t border-border/50 gap-3">
-                  {server.status === 'running' ? (
-                    <Button 
-                      variant="destructive" 
-                      className="flex-1"
-                      disabled={loadingServer === server.id}
-                      onClick={() => handleStatusChange(server, 'stopped')}
-                    >
-                      {loadingServer === server.id ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Square className="w-4 h-4 mr-2" />}
-                      Stop
-                    </Button>
-                  ) : (
-                    <Button 
-                      variant="default" 
-                      className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white"
-                      disabled={loadingServer === server.id}
-                      onClick={() => handleStatusChange(server, 'running')}
-                    >
-                      {loadingServer === server.id ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Play className="w-4 h-4 mr-2" />}
-                      Start
-                    </Button>
-                  )}
-                  <Link href={`/console/${server.id}`} className="flex-1">
-                    <Button variant="outline" className="w-full">
-                      <Terminal className="w-4 h-4 mr-2" />
-                      Console
-                    </Button>
-                  </Link>
-                </CardFooter>
-              </Card>
+              {/* Resources */}
+              <div className="space-y-2.5">
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between text-[11px]">
+                    <span className="flex items-center gap-1.5 text-zinc-500">
+                      <HardDrive className="w-3 h-3" /> RAM
+                    </span>
+                    <span className="text-zinc-400 font-mono">{server.ramUsedMB} MB</span>
+                  </div>
+                  <MiniBar value={(server.ramUsedMB / 512) * 100} color="bg-violet-500" />
+                </div>
+
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between text-[11px]">
+                    <span className="flex items-center gap-1.5 text-zinc-500">
+                      <Cpu className="w-3 h-3" /> CPU
+                    </span>
+                    <span className="text-zinc-400 font-mono">{server.cpuUsed}%</span>
+                  </div>
+                  <MiniBar
+                    value={server.cpuUsed}
+                    color={server.cpuUsed > 80 ? "bg-red-500" : server.cpuUsed > 50 ? "bg-amber-500" : "bg-violet-500"}
+                  />
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="flex gap-2 pt-1 border-t border-[#1a1a1a]">
+                {server.status === "running" ? (
+                  <button
+                    className="flex-1 flex items-center justify-center gap-1.5 text-xs font-medium text-red-400 bg-red-500/8 hover:bg-red-500/14 border border-red-500/15 rounded-md h-8 transition-colors disabled:opacity-50"
+                    disabled={loadingServer === server.id}
+                    onClick={() => handleStatusChange(server, "stopped")}
+                  >
+                    {loadingServer === server.id
+                      ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      : <Square className="w-3.5 h-3.5" />}
+                    Stop
+                  </button>
+                ) : (
+                  <button
+                    className="flex-1 flex items-center justify-center gap-1.5 text-xs font-medium text-emerald-400 bg-emerald-500/8 hover:bg-emerald-500/14 border border-emerald-500/15 rounded-md h-8 transition-colors disabled:opacity-50"
+                    disabled={loadingServer === server.id}
+                    onClick={() => handleStatusChange(server, "running")}
+                  >
+                    {loadingServer === server.id
+                      ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      : <Play className="w-3.5 h-3.5" />}
+                    Start
+                  </button>
+                )}
+                <Link href={`/console/${server.id}`} className="flex-1">
+                  <button className="w-full flex items-center justify-center gap-1.5 text-xs font-medium text-zinc-400 bg-white/4 hover:bg-white/7 border border-white/6 rounded-md h-8 transition-colors">
+                    <Terminal className="w-3.5 h-3.5" />
+                    Console
+                  </button>
+                </Link>
+              </div>
             </motion.div>
           ))}
-        </motion.div>
+        </div>
       )}
     </div>
   );

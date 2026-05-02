@@ -67,69 +67,67 @@
 }
 
 :root {
-  /* Using Dark Mode for all contexts as requested */
-  --button-outline: rgba(255,255,255, .10);
-  --badge-outline: rgba(255,255,255, .05);
+  --button-outline: rgba(255,255,255, .08);
+  --badge-outline: rgba(255,255,255, .04);
+  --elevate-1: rgba(255,255,255, .03);
+  --elevate-2: rgba(255,255,255, .06);
 
-  --opaque-button-border-intensity: 9; 
+  /* Pure near-black Railway palette */
+  --background: 0 0% 4%;          /* #0a0a0a */
+  --foreground: 0 0% 94%;         /* #f0f0f0 */
 
-  --elevate-1: rgba(255,255,255, .04);
-  --elevate-2: rgba(255,255,255, .09);
+  --border: 0 0% 12%;             /* #1e1e1e */
+  --input: 0 0% 10%;
+  --ring: 263 70% 60%;            /* violet */
 
-  --background: 225 50% 8%; /* Deep navy #0a0f1e */
-  --foreground: 210 40% 98%;
+  --card: 0 0% 7%;                /* #111111 */
+  --card-foreground: 0 0% 94%;
+  --card-border: 0 0% 12%;
 
-  --border: 225 30% 16%;
-  --input: 225 30% 16%;
-  --ring: 217 91% 60%;
+  --sidebar: 0 0% 5%;             /* #0d0d0d */
+  --sidebar-foreground: 0 0% 94%;
+  --sidebar-border: 0 0% 10%;
+  --sidebar-primary: 263 70% 60%;
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-accent: 0 0% 10%;
+  --sidebar-accent-foreground: 0 0% 94%;
+  --sidebar-accent-border: 0 0% 12%;
+  --sidebar-ring: 263 70% 60%;
 
-  --card: 225 40% 10%;
-  --card-foreground: 210 40% 98%;
-  --card-border: 225 30% 16%;
+  --popover: 0 0% 7%;
+  --popover-foreground: 0 0% 94%;
+  --popover-border: 0 0% 14%;
 
-  --sidebar: 225 50% 6%;
-  --sidebar-foreground: 210 40% 98%;
-  --sidebar-border: 225 30% 12%;
-  --sidebar-primary: 217 91% 60%;
-  --sidebar-primary-foreground: 210 40% 98%;
-  --sidebar-accent: 225 35% 14%;
-  --sidebar-accent-foreground: 210 40% 98%;
-  --sidebar-ring: 217 91% 60%;
-
-  --popover: 225 40% 10%;
-  --popover-foreground: 210 40% 98%;
-  --popover-border: 225 30% 16%;
-
-  --primary: 217 91% 60%; /* Electric blue #3b82f6 */
+  --primary: 263 70% 60%;         /* #7c3aed violet */
   --primary-foreground: 0 0% 100%;
 
-  --secondary: 225 30% 16%;
-  --secondary-foreground: 210 40% 98%;
+  --secondary: 0 0% 12%;
+  --secondary-foreground: 0 0% 94%;
 
-  --muted: 225 30% 14%;
-  --muted-foreground: 215 20% 65%;
+  --muted: 0 0% 10%;
+  --muted-foreground: 0 0% 45%;
 
-  --accent: 225 35% 16%;
-  --accent-foreground: 210 40% 98%;
+  --accent: 0 0% 12%;
+  --accent-foreground: 0 0% 94%;
 
-  --destructive: 0 84% 60%;
-  --destructive-foreground: 210 40% 98%;
+  --destructive: 0 72% 51%;
+  --destructive-foreground: 0 0% 100%;
 
-  --chart-1: 217 91% 60%;
+  --chart-1: 263 70% 60%;
   --chart-2: 142 71% 45%;
   --chart-3: 45 93% 47%;
-  --chart-4: 0 84% 60%;
-  --chart-5: 262 80% 50%;
+  --chart-4: 0 72% 51%;
+  --chart-5: 200 80% 50%;
 
   --app-font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
   --app-font-serif: Georgia, serif;
-  --app-font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  
-  --radius: 0.5rem;
-  
-  --shadow-sm: 0px 2px 4px 0px rgba(0,0,0, 0.4);
-  --shadow: 0px 4px 8px 0px rgba(0,0,0, 0.4);
-  --shadow-md: 0px 8px 16px 0px rgba(0,0,0, 0.5);
+  --app-font-mono: 'JetBrains Mono', 'Fira Code', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
+  --radius: 0.375rem;
+
+  --shadow-sm: 0px 1px 3px 0px rgba(0,0,0, 0.6);
+  --shadow: 0px 4px 12px 0px rgba(0,0,0, 0.5);
+  --shadow-md: 0px 8px 24px 0px rgba(0,0,0, 0.6);
 
   --sidebar-primary-border: hsl(var(--sidebar-primary));
   --sidebar-accent-border: hsl(var(--sidebar-accent));
@@ -148,4 +146,37 @@
   body {
     @apply font-sans antialiased bg-background text-foreground;
   }
+
+  ::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: hsl(0 0% 18%);
+    border-radius: 2px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: hsl(0 0% 28%);
+  }
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.85); }
+}
+
+.pulse-dot {
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+
+@keyframes blink-cursor {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+.cursor-blink {
+  animation: blink-cursor 1s step-end infinite;
 }
