@@ -55,9 +55,40 @@ input, select, textarea { font-family: var(--font); }
   width: 26px; height: 26px;
   display: flex; align-items: center; justify-content: center;
   border-radius: 5px; color: var(--text3);
-  transition: background .12s, color .12s;
+  border: 1px solid transparent;
+  transition: background .15s, color .15s, border-color .15s, box-shadow .15s;
+  position: relative;
 }
-.sidebar-toggle:hover { background: rgba(255,255,255,.07); color: var(--text2); }
+.sidebar-toggle:hover {
+  background: rgba(124,58,237,.12);
+  color: var(--violet-l);
+  border-color: rgba(124,58,237,.35);
+  box-shadow: 0 0 8px rgba(124,58,237,.4), 0 0 20px rgba(124,58,237,.15), inset 0 0 6px rgba(124,58,237,.08);
+}
+.sidebar-toggle:active {
+  box-shadow: 0 0 12px rgba(124,58,237,.6), 0 0 30px rgba(124,58,237,.25);
+  background: rgba(124,58,237,.18);
+}
+/* Neon pulse ring on hover */
+.sidebar-toggle::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: 7px;
+  background: transparent;
+  border: 1px solid rgba(124,58,237,0);
+  transition: border-color .15s, box-shadow .15s;
+  pointer-events: none;
+}
+.sidebar-toggle:hover::after {
+  border-color: rgba(124,58,237,.2);
+  box-shadow: 0 0 8px rgba(124,58,237,.3);
+  animation: neon-pulse 1.8s ease-in-out infinite;
+}
+@keyframes neon-pulse {
+  0%, 100% { box-shadow: 0 0 6px rgba(124,58,237,.3); opacity: 1; }
+  50%       { box-shadow: 0 0 14px rgba(124,58,237,.6), 0 0 28px rgba(124,58,237,.2); opacity: .8; }
+}
 
 /* ── Sidebar tooltip (icon-only mode) ──────────────────── */
 #sidebar-tip {
