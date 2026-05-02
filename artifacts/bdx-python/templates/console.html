@@ -3,29 +3,59 @@
 
 {% block content %}
 <div class="console-shell">
+
   <!-- Top bar -->
   <div class="console-topbar">
     <div class="console-title">
-      <a href="{{ base }}/servers" class="back-btn">
+      <a href="{{ base }}/servers" class="back-btn" title="Back to servers">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
       </a>
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="2"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg>
-      <span class="console-title-text" id="srv-name">Loading...</span>
-      <span class="status-pill stopped" id="srv-status" style="font-size:10px">—</span>
+      <div class="term-srv-icon">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg>
+      </div>
+      <div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span class="console-title-text" id="srv-name">Loading…</span>
+          <span class="status-pill stopped" id="srv-status" style="font-size:10px">—</span>
+        </div>
+        <div class="console-subtitle" id="srv-meta">—</div>
+      </div>
     </div>
     <div class="console-actions">
       <div class="live-badge offline" id="live-badge">
         <div class="live-dot"></div>
         <span id="live-text">Offline</span>
       </div>
-      <button class="btn btn-ghost" onclick="openInjectModal()">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="16"></line><line x1="8" y1="12" x2="16" y2="12"></line></svg>
-        Inject Log
+      <button class="btn btn-ghost" id="autoscroll-btn" onclick="toggleAutoScroll()" title="Toggle auto-scroll">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="7 13 12 18 17 13"></polyline><polyline points="7 6 12 11 17 6"></polyline></svg>
+        Auto-scroll
+      </button>
+      <button class="btn btn-ghost" onclick="downloadLogs()" title="Download logs">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+      </button>
+      <button class="btn btn-ghost" onclick="openInjectModal()" title="Inject log">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+        Inject
       </button>
       <button class="btn btn-danger" onclick="clearLogs()">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"></path></svg>
         Clear
       </button>
+    </div>
+  </div>
+
+  <!-- Filter bar -->
+  <div class="console-filterbar">
+    <div class="log-filter-tabs" id="filter-tabs">
+      <button class="log-tab active" data-level="all" onclick="setFilter('all',this)">All <span class="log-tab-count" id="cnt-all">0</span></button>
+      <button class="log-tab" data-level="info" onclick="setFilter('info',this)">Info <span class="log-tab-count info" id="cnt-info">0</span></button>
+      <button class="log-tab" data-level="warn" onclick="setFilter('warn',this)">Warn <span class="log-tab-count warn" id="cnt-warn">0</span></button>
+      <button class="log-tab" data-level="error" onclick="setFilter('error',this)">Error <span class="log-tab-count error" id="cnt-error">0</span></button>
+      <button class="log-tab" data-level="debug" onclick="setFilter('debug',this)">Debug <span class="log-tab-count debug" id="cnt-debug">0</span></button>
+    </div>
+    <div class="log-search-wrap">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+      <input class="log-search" type="text" id="log-search" placeholder="Search logs…" oninput="applyFilter()" />
     </div>
   </div>
 
@@ -37,43 +67,50 @@
         <div class="term-dot y"></div>
         <div class="term-dot g"></div>
       </div>
-      <span class="term-chrome-title" id="term-title">— console output</span>
-      <div class="streaming-badge" id="stream-badge" style="display:none">
-        <div class="stream-dot"></div>streaming
+      <span class="term-chrome-title" id="term-title">console output</span>
+      <div style="margin-left:auto;display:flex;align-items:center;gap:10px">
+        <div class="streaming-badge" id="stream-badge" style="display:none">
+          <div class="stream-dot"></div>live
+        </div>
+        <span class="term-count" id="term-count" style="font-size:10px;color:#333;font-family:var(--mono)">0 lines</span>
       </div>
     </div>
+
     <div class="term-body" id="term-body">
-      <div class="term-empty" id="term-empty" style="display:none">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg>
-        <span>No log output</span>
-        <span style="font-size:11px;opacity:.5">Start the server to see output here</span>
+      <div class="term-empty" id="term-empty">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg>
+        <span>No output</span>
+        <span style="font-size:11px;opacity:.4">Start the server to see console output</span>
       </div>
     </div>
+
     <div class="term-prompt">
-      <span class="term-ps">$</span>
-      <span class="term-cmd">read-only terminal</span>
-      <span class="term-count" id="term-count">0 entries</span>
+      <span class="term-ps1"><span style="color:#4a3f7e">bdx</span><span style="color:#3a3a3a">@</span><span style="color:#3a3f6e" id="prompt-srv">server</span><span style="color:#2a2a2a"> ~ </span><span style="color:var(--violet-l)">$</span></span>
+      <span class="term-cmd" id="prompt-status">read-only console</span>
     </div>
   </div>
 </div>
 
 <!-- Inject modal -->
 <div class="modal-overlay" id="inject-modal">
-  <div class="modal">
-    <div class="modal-title">Inject Log Entry</div>
+  <div class="modal" style="width:480px">
+    <div class="modal-title">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--violet-l)" stroke-width="2"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg>
+      Inject Log Entry
+    </div>
     <div class="form-grid">
       <div class="form-group">
         <label>Message</label>
-        <input type="text" id="inj-msg" placeholder="Enter log message..." onkeydown="if(event.key==='Enter')submitInject()" />
+        <input type="text" id="inj-msg" placeholder="Enter log message…" onkeydown="if(event.key==='Enter')submitInject()" />
       </div>
       <div class="form-group">
         <label>Level</label>
-        <select id="inj-level">
-          <option value="info">info</option>
-          <option value="warn">warn</option>
-          <option value="error">error</option>
-          <option value="debug">debug</option>
-        </select>
+        <div class="inj-level-tabs">
+          <label class="inj-lvl-opt"><input type="radio" name="inj-level" value="info" checked><span class="inj-lvl-label info">info</span></label>
+          <label class="inj-lvl-opt"><input type="radio" name="inj-level" value="warn"><span class="inj-lvl-label warn">warn</span></label>
+          <label class="inj-lvl-opt"><input type="radio" name="inj-level" value="error"><span class="inj-lvl-label error">error</span></label>
+          <label class="inj-lvl-opt"><input type="radio" name="inj-level" value="debug"><span class="inj-lvl-label debug">debug</span></label>
+        </div>
       </div>
     </div>
     <div class="modal-actions" style="display:flex;gap:8px">
@@ -87,53 +124,153 @@
 {% block scripts %}
 <script>
 const SERVER_ID = {{ server_id }};
-let allLogs = new Map(); // id -> log
+let allLogs = new Map();
 let autoScroll = true;
+let activeFilter = 'all';
+let searchQuery = '';
+let lineNum = 0;
 let es = null;
 
-function logLine(log) {
-  const ts = new Date(log.timestamp);
-  const time = ts.toTimeString().slice(0, 8);
-  const lvl = log.level || 'info';
-  return `<div class="log-line" data-id="${log.id}">
+/* ── Log rendering ─────────────────────────────────────── */
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function fmtTime(ts) {
+  const d = new Date(ts);
+  const pad = n => String(n).padStart(2,'0');
+  const ms = String(d.getMilliseconds()).padStart(3,'0');
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}.${ms}`;
+}
+
+function colorizeMsg(msg, level) {
+  // Highlight keywords
+  const escaped = escHtml(msg);
+  if (level === 'error') return `<span class="log-msg-text error-msg">${escaped}</span>`;
+  if (level === 'warn') return `<span class="log-msg-text warn-msg">${escaped}</span>`;
+
+  // keyword highlight for info/debug
+  return `<span class="log-msg-text">${escaped
+    .replace(/\b(OK|SUCCESS|RUNNING|STARTED|READY|DONE|CONNECTED)\b/g, '<span class="kw-ok">$1</span>')
+    .replace(/\b(ERROR|FAIL|FAILED|FATAL|CRASH)\b/g, '<span class="kw-err">$1</span>')
+    .replace(/\b(WARN|WARNING|DEPRECATED)\b/g, '<span class="kw-warn">$1</span>')
+    .replace(/(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/g, '<span class="kw-ip">$1</span>')
+    .replace(/:[0-9]{2,5}\b/g, m => `<span class="kw-port">${m}</span>`)
+    .replace(/(?<!\w)(✓|▶|⏹)/g, m => `<span class="kw-sym">${m}</span>`)
+  }</span>`;
+}
+
+function logLine(log, n) {
+  const lvl = (log.level || 'info').toLowerCase();
+  const time = fmtTime(log.timestamp);
+  return `<div class="log-line ll-${lvl}" data-id="${log.id}" data-level="${lvl}" data-msg="${escHtml((log.message||'').toLowerCase())}">
+    <span class="log-ln">${String(n).padStart(4,' ')}</span>
     <span class="log-ts">${time}</span>
-    <span class="log-lvl ${lvl}">${lvl.toUpperCase().padEnd(5,' ')}</span>
-    <span class="log-msg">${escHtml(log.message)}</span>
+    <span class="log-lvl-badge ${lvl}">${lvl}</span>
+    ${colorizeMsg(log.message || '', lvl)}
   </div>`;
 }
 
-function escHtml(s) {
-  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+function updateCounts() {
+  const logs = Array.from(allLogs.values());
+  const counts = { all: logs.length, info: 0, warn: 0, error: 0, debug: 0 };
+  logs.forEach(l => { const lv = l.level || 'info'; if (counts[lv] !== undefined) counts[lv]++; });
+  Object.keys(counts).forEach(k => {
+    const el = document.getElementById(`cnt-${k}`);
+    if (el) el.textContent = counts[k];
+  });
+  return counts;
+}
+
+function applyFilter() {
+  searchQuery = document.getElementById('log-search').value.toLowerCase();
+  const lines = document.querySelectorAll('.log-line');
+  let visible = 0;
+  lines.forEach(el => {
+    const lvMatch = activeFilter === 'all' || el.dataset.level === activeFilter;
+    const srchMatch = !searchQuery || el.dataset.msg.includes(searchQuery);
+    const show = lvMatch && srchMatch;
+    el.style.display = show ? '' : 'none';
+    if (show) visible++;
+  });
+  document.getElementById('term-count').textContent = `${visible} lines`;
+  const empty = document.getElementById('term-empty');
+  if (empty) empty.style.display = allLogs.size === 0 ? 'flex' : 'none';
+}
+
+function setFilter(level, btn) {
+  activeFilter = level;
+  document.querySelectorAll('.log-tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  applyFilter();
 }
 
 function renderLogs() {
   const body = document.getElementById('term-body');
   const empty = document.getElementById('term-empty');
   const sorted = Array.from(allLogs.values()).sort((a,b) => new Date(a.timestamp) - new Date(b.timestamp));
+
   if (sorted.length === 0) {
-    empty.style.display = 'flex';
     body.innerHTML = '';
-    body.appendChild(empty);
-  } else {
-    empty.style.display = 'none';
-    body.innerHTML = sorted.map(logLine).join('');
+    if (empty) { empty.style.display = 'flex'; body.appendChild(empty); }
+    document.getElementById('term-count').textContent = '0 lines';
+    return;
   }
-  document.getElementById('term-count').textContent = `${sorted.length} entries`;
+  if (empty) empty.style.display = 'none';
+
+  lineNum = 0;
+  body.innerHTML = sorted.map(l => logLine(l, ++lineNum)).join('');
+  updateCounts();
+  applyFilter();
   if (autoScroll) body.scrollTop = body.scrollHeight;
 }
 
-function addLog(log) {
-  if (!allLogs.has(log.id)) {
-    allLogs.set(log.id, log);
-    renderLogs();
-  }
+function appendLog(log) {
+  const body = document.getElementById('term-body');
+  const empty = document.getElementById('term-empty');
+  if (empty) empty.style.display = 'none';
+  lineNum++;
+  const div = document.createElement('div');
+  div.innerHTML = logLine(log, lineNum);
+  const el = div.firstElementChild;
+  body.appendChild(el);
+  const lvl = (log.level || 'info').toLowerCase();
+  const lvMatch = activeFilter === 'all' || lvl === activeFilter;
+  const srchMatch = !searchQuery || (log.message||'').toLowerCase().includes(searchQuery);
+  if (!lvMatch || !srchMatch) el.style.display = 'none';
+  updateCounts();
+  applyFilter();
+  if (autoScroll) body.scrollTop = body.scrollHeight;
 }
 
 document.getElementById('term-body').addEventListener('scroll', e => {
   const el = e.target;
-  autoScroll = el.scrollHeight - el.scrollTop - el.clientHeight < 60;
+  autoScroll = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+  updateAutoScrollBtn();
 });
 
+function toggleAutoScroll() {
+  autoScroll = !autoScroll;
+  updateAutoScrollBtn();
+  if (autoScroll) {
+    const b = document.getElementById('term-body');
+    b.scrollTop = b.scrollHeight;
+  }
+}
+
+function updateAutoScrollBtn() {
+  const btn = document.getElementById('autoscroll-btn');
+  if (autoScroll) {
+    btn.style.color = 'var(--violet-l)';
+    btn.style.borderColor = 'rgba(124,58,237,.3)';
+  } else {
+    btn.style.color = '';
+    btn.style.borderColor = '';
+  }
+}
+updateAutoScrollBtn();
+
+/* ── Server info ───────────────────────────────────────── */
 async function loadServer() {
   try {
     const s = await api(`/api/servers/${SERVER_ID}`);
@@ -141,18 +278,22 @@ async function loadServer() {
     const pill = document.getElementById('srv-status');
     pill.textContent = s.status;
     pill.className = `status-pill ${s.status}`;
-    document.getElementById('term-title').textContent = `${s.name}  —  console output`;
+    document.getElementById('term-title').textContent = `${s.name}  —  console`;
+    document.getElementById('prompt-srv').textContent = s.name.toLowerCase().replace(/\s+/g,'-');
+    document.getElementById('srv-meta').textContent = `ID #${s.id}  ·  ${s.status === 'running' ? 'Running' : 'Stopped'}`;
+    document.getElementById('prompt-status').textContent = s.status === 'running' ? 'streaming output' : 'server offline';
   } catch(e) {}
 }
 
 async function loadLogs() {
   try {
-    const logs = await api(`/api/servers/${SERVER_ID}/logs?limit=200`);
+    const logs = await api(`/api/servers/${SERVER_ID}/logs?limit=500`);
     logs.forEach(l => allLogs.set(l.id, l));
     renderLogs();
   } catch(e) {}
 }
 
+/* ── SSE ────────────────────────────────────────────────── */
 function connectSSE() {
   if (es) es.close();
   const badge = document.getElementById('live-badge');
@@ -160,7 +301,6 @@ function connectSSE() {
   const streamBadge = document.getElementById('stream-badge');
 
   es = new EventSource(`${BASE}/api/servers/${SERVER_ID}/logs/stream`);
-
   es.onopen = () => {
     badge.className = 'live-badge connected';
     text.textContent = 'Live';
@@ -168,31 +308,50 @@ function connectSSE() {
   };
   es.onerror = () => {
     badge.className = 'live-badge offline';
-    text.textContent = 'Offline';
+    text.textContent = 'Reconnecting…';
     streamBadge.style.display = 'none';
-    // Reconnect after 3s
-    setTimeout(connectSSE, 3000);
+    setTimeout(connectSSE, 3500);
   };
   es.onmessage = e => {
     try {
       const log = JSON.parse(e.data);
-      addLog(log);
+      if (!allLogs.has(log.id)) {
+        allLogs.set(log.id, log);
+        appendLog(log);
+      }
     } catch {}
   };
 }
 
+/* ── Actions ─────────────────────────────────────────────── */
 async function clearLogs() {
-  if (!confirm('Clear all logs?')) return;
+  if (!confirm('Clear all console logs for this server?')) return;
   try {
     await api(`/api/servers/${SERVER_ID}/logs`, { method: 'DELETE' });
-    allLogs.clear();
-    renderLogs();
+    allLogs.clear(); lineNum = 0;
+    document.getElementById('term-body').innerHTML = '';
+    const empty = document.getElementById('term-empty');
+    if (empty) { empty.style.display = 'flex'; document.getElementById('term-body').appendChild(empty); }
+    updateCounts();
+    document.getElementById('term-count').textContent = '0 lines';
     toast('Logs cleared');
-  } catch(e) { toast('Failed to clear logs'); }
+  } catch(e) { toast('Failed to clear'); }
+}
+
+function downloadLogs() {
+  const sorted = Array.from(allLogs.values()).sort((a,b) => new Date(a.timestamp) - new Date(b.timestamp));
+  const text = sorted.map(l => `[${l.timestamp}] [${(l.level||'info').toUpperCase()}] ${l.message}`).join('\n');
+  const blob = new Blob([text], { type: 'text/plain' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url;
+  a.download = `console-server-${SERVER_ID}.log`;
+  a.click(); URL.revokeObjectURL(url);
+  toast('Logs downloaded');
 }
 
 function openInjectModal() {
   document.getElementById('inj-msg').value = '';
+  document.querySelector('input[name="inj-level"][value="info"]').checked = true;
   document.getElementById('inject-modal').classList.add('show');
   setTimeout(() => document.getElementById('inj-msg').focus(), 100);
 }
@@ -200,16 +359,15 @@ function closeModal(id) { document.getElementById(id).classList.remove('show'); 
 
 async function submitInject() {
   const msg = document.getElementById('inj-msg').value.trim();
-  const level = document.getElementById('inj-level').value;
+  const level = document.querySelector('input[name="inj-level"]:checked')?.value || 'info';
   if (!msg) return;
   try {
     await api(`/api/servers/${SERVER_ID}/logs`, { method: 'POST', body: { message: msg, level } });
     closeModal('inject-modal');
-    toast('Log injected');
+    toast('Injected');
   } catch(e) { toast('Failed: ' + e.message); }
 }
 
-// Close modal on overlay click
 document.getElementById('inject-modal').addEventListener('click', e => {
   if (e.target === e.currentTarget) closeModal('inject-modal');
 });
