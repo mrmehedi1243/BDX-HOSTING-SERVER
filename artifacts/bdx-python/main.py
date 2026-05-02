@@ -339,6 +339,8 @@ class PlanBody(BaseModel):
     name: str
     maxSlots: int
     pricePerMonth: int
+    priceBdt: int = 0
+    durationDays: Optional[int] = None
     ramMB: int
     cpuPercent: int
     description: Optional[str] = ""
@@ -346,18 +348,21 @@ class PlanBody(BaseModel):
 @app.post(f"{BASE}/api/plans")
 async def api_create_plan(body: PlanBody):
     row = await db.fetchone(
-        """INSERT INTO plans(name,max_slots,price_per_month,ram_mb,cpu_percent,description)
-           VALUES($1,$2,$3,$4,$5,$6) RETURNING *""",
-        body.name, body.maxSlots, body.pricePerMonth, body.ramMB, body.cpuPercent, body.description
+        """INSERT INTO plans(name,max_slots,price_per_month,price_bdt,duration_days,ram_mb,cpu_percent,description)
+           VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *""",
+        body.name, body.maxSlots, body.pricePerMonth, body.priceBdt, body.durationDays,
+        body.ramMB, body.cpuPercent, body.description
     )
     return row_to_json(row)
 
 @app.put(f"{BASE}/api/plans/{{plan_id}}")
 async def api_update_plan(plan_id: int, body: PlanBody):
     row = await db.fetchone(
-        """UPDATE plans SET name=$2,max_slots=$3,price_per_month=$4,ram_mb=$5,cpu_percent=$6,description=$7
+        """UPDATE plans SET name=$2,max_slots=$3,price_per_month=$4,price_bdt=$5,
+           duration_days=$6,ram_mb=$7,cpu_percent=$8,description=$9
            WHERE id=$1 RETURNING *""",
-        plan_id, body.name, body.maxSlots, body.pricePerMonth, body.ramMB, body.cpuPercent, body.description
+        plan_id, body.name, body.maxSlots, body.pricePerMonth, body.priceBdt,
+        body.durationDays, body.ramMB, body.cpuPercent, body.description
     )
     if not row:
         raise HTTPException(404, "Plan not found")
@@ -400,12 +405,29 @@ async def api_get_user(user_id: int):
 class UserUpdateBody(BaseModel):
     planId: Optional[int] = None
     role: Optional[str] = None
+    planExpiresAt: Optional[str] = None  # ISO datetime string or None
 
 @app.put(f"{BASE}/api/users/{{user_id}}")
 async def api_update_user(user_id: int, body: UserUpdateBody):
+    from datetime import datetime as dt
+    expires = None
+    if body.planExpiresAt:
+        try:
+            expires = dt.fromisoformat(body.planExpiresAt.replace("Z",""))
+        except Exception:
+            expires = None
+
+    # If plan changed and no explicit expiry set, auto-calculate from plan duration
+    if body.planId and not expires:
+        plan = await db.fetchone("SELECT duration_days FROM plans WHERE id=$1", body.planId)
+        if plan and plan.get("duration_days"):
+            from datetime import timedelta
+            expires = dt.utcnow() + timedelta(days=plan["duration_days"])
+
     row = await db.fetchone(
-        "UPDATE users SET plan_id=$2, role=COALESCE($3::user_role,role) WHERE id=$1 RETURNING id,username,email,role,plan_id",
-        user_id, body.planId, body.role
+        """UPDATE users SET plan_id=$2, role=COALESCE($3::user_role,role), plan_expires_at=$4
+           WHERE id=$1 RETURNING id,username,email,role,plan_id,plan_expires_at""",
+        user_id, body.planId, body.role, expires
     )
     if not row:
         raise HTTPException(404, "User not found")

@@ -370,6 +370,55 @@ tr:hover td { background: rgba(255,255,255,.015); }
 .plan-spec svg { width: 13px; height: 13px; }
 .plan-actions { display: flex; gap: 8px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,.04); }
 
+/* ── Plan card extras ─────────────────────────────────── */
+.trial-card { border-color: rgba(245,158,11,.2) !important; }
+.trial-card:hover { border-color: rgba(245,158,11,.35) !important; }
+.trial-badge {
+  font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em;
+  padding: 2px 7px; border-radius: 20px;
+  background: rgba(245,158,11,.12); color: var(--amber); border: 1px solid rgba(245,158,11,.2);
+}
+.free-badge {
+  font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em;
+  padding: 2px 7px; border-radius: 20px;
+  background: rgba(16,185,129,.1); color: var(--emerald); border: 1px solid rgba(16,185,129,.15);
+}
+.plan-price-bdt { font-size: 26px; font-weight: 700; color: #fbbf24; letter-spacing: -.5px; }
+.plan-price-num.free { font-size: 22px; color: var(--emerald); }
+
+/* Input prefix/suffix */
+.input-prefix-wrap { position: relative; }
+.input-prefix {
+  position: absolute; left: 10px; top: 50%; transform: translateY(-50%);
+  font-size: 12px; color: var(--text3); pointer-events: none; z-index: 1;
+}
+.input-suffix {
+  position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+  font-size: 11px; color: var(--text3); pointer-events: none;
+}
+.duration-hint { font-size: 10px; color: var(--violet-l); margin-left: 4px; font-weight: 400; }
+
+/* Plan preview row */
+.plan-preview-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 9px 12px; border-radius: var(--radius);
+  background: rgba(124,58,237,.06); border: 1px solid rgba(124,58,237,.15);
+  font-size: 12px;
+}
+.plan-preview-label { color: var(--text3); font-size: 11px; flex-shrink: 0; }
+.plan-card-mini-preview { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+
+/* Expiry pills */
+.expiry-pill {
+  display: inline-flex; align-items: center; font-size: 11px; font-weight: 500;
+  padding: 2px 8px; border-radius: 20px;
+}
+.expiry-ok   { background: rgba(16,185,129,.08); color: var(--emerald); }
+.expiry-warn { background: rgba(245,158,11,.1); color: var(--amber); }
+.expiry-soon { background: rgba(239,68,68,.08); color: var(--red); animation: pulse-red 1.5s ease-in-out infinite; }
+.expiry-expired { background: rgba(239,68,68,.12); color: var(--red); text-decoration: line-through; opacity: .7; }
+@keyframes pulse-red { 0%,100%{opacity:1} 50%{opacity:.6} }
+
 /* ── User table ───────────────────────────────────────── */
 .user-avatar {
   width: 28px; height: 28px; border-radius: 50%;

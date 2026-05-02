@@ -88,12 +88,30 @@
           <input class="plan-option" type="radio" name="plan_id" id="plan-{{ plan.id }}" value="{{ plan.id }}" {% if loop.first %}checked{% endif %}>
           <label class="plan-label" for="plan-{{ plan.id }}">
             <div class="plan-label-left">
-              <span class="plan-label-name">{{ plan.name }}</span>
-              <span class="plan-label-desc">{{ plan.max_slots }} slots · {{ plan.ram_mb }}MB RAM</span>
+              <div style="display:flex;align-items:center;gap:6px">
+                <span class="plan-label-name">{{ plan.name }}</span>
+                {% if plan.duration_days and plan.duration_days <= 7 %}
+                  <span style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;padding:2px 6px;border-radius:20px;background:rgba(245,158,11,.12);color:#f59e0b;border:1px solid rgba(245,158,11,.2)">Trial</span>
+                {% endif %}
+              </div>
+              <span class="plan-label-desc">
+                {{ plan.max_slots }} slot{{ 's' if plan.max_slots != 1 else '' }} ·
+                {% if plan.ram_mb >= 1024 %}{{ "%.1f"|format(plan.ram_mb/1024) }}GB{% else %}{{ plan.ram_mb }}MB{% endif %} RAM
+                {% if plan.duration_days %} · {{ plan.duration_days }}d{% endif %}
+              </span>
             </div>
-            <span class="plan-label-price">
-              {% if plan.price_per_month == 0 %}Free{% else %}${{ plan.price_per_month | int }}<span>/mo</span>{% endif %}
-            </span>
+            <div style="text-align:right">
+              {% if plan.price_bdt and plan.price_bdt > 0 %}
+                <span class="plan-label-price" style="color:#fbbf24">৳{{ plan.price_bdt }}<span style="font-size:10px;font-weight:400;color:var(--text3)">/mo</span></span>
+              {% elif plan.price_per_month and plan.price_per_month > 0 %}
+                <span class="plan-label-price">${{ plan.price_per_month | int }}<span>/mo</span></span>
+              {% else %}
+                <span class="plan-label-price" style="color:#10b981">Free</span>
+              {% endif %}
+              {% if plan.duration_days %}
+                <div style="font-size:10px;color:var(--text3)">{{ plan.duration_days }} days</div>
+              {% endif %}
+            </div>
           </label>
           {% endfor %}
         </div>

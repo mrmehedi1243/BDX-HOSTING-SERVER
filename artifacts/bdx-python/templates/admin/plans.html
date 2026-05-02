@@ -5,7 +5,7 @@
 <div class="page-header-row">
   <div>
     <h1 class="page-title">Hosting Plans</h1>
-    <p class="page-sub">Manage available plans and resource allocations.</p>
+    <p class="page-sub">Manage plans, pricing in ৳ BDT, slots, and trial duration.</p>
   </div>
   <button class="btn btn-primary" onclick="openCreate()">
     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
@@ -13,43 +13,91 @@
   </button>
 </div>
 
-<div class="plan-grid" id="plans-grid"></div>
+<div class="plan-grid" id="plans-grid">
+  <div class="plan-card-big"><div class="skel" style="height:14px;width:40%;margin-bottom:10px"></div><div class="skel" style="height:28px;width:55%"></div></div>
+  <div class="plan-card-big"><div class="skel" style="height:14px;width:40%;margin-bottom:10px"></div><div class="skel" style="height:28px;width:55%"></div></div>
+  <div class="plan-card-big"><div class="skel" style="height:14px;width:40%;margin-bottom:10px"></div><div class="skel" style="height:28px;width:55%"></div></div>
+</div>
 
 <!-- Create/Edit modal -->
 <div class="modal-overlay" id="plan-modal">
-  <div class="modal">
-    <div class="modal-title" id="modal-title">Create Plan</div>
+  <div class="modal" style="width:520px">
+    <div class="modal-title" id="modal-title" style="display:flex;align-items:center;gap:8px">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--violet-l)" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>
+      <span id="modal-title-text">Create Plan</span>
+    </div>
+
     <div class="form-grid">
+      <!-- Name + Description -->
       <div class="form-group">
         <label>Plan Name</label>
-        <input type="text" id="f-name" placeholder="Pro" />
+        <input type="text" id="f-name" placeholder="e.g. Pro, Starter, Business…" />
       </div>
-      <div class="form-row">
+      <div class="form-group">
+        <label>Description <span style="color:var(--text3)">(optional)</span></label>
+        <input type="text" id="f-desc" placeholder="Short tagline for this plan" />
+      </div>
+
+      <!-- Pricing row -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
         <div class="form-group">
-          <label>Price / month ($)</label>
-          <input type="number" id="f-price" value="0" />
+          <label>
+            <span style="color:#f59e0b">৳</span> Price (BDT / month)
+          </label>
+          <div class="input-prefix-wrap">
+            <span class="input-prefix">৳</span>
+            <input type="number" id="f-bdt" value="0" min="0" style="padding-left:28px" />
+          </div>
         </div>
         <div class="form-group">
-          <label>Max Slots</label>
-          <input type="number" id="f-slots" value="1" />
+          <label>$ Price (USD / month)</label>
+          <div class="input-prefix-wrap">
+            <span class="input-prefix">$</span>
+            <input type="number" id="f-price" value="0" min="0" style="padding-left:28px" />
+          </div>
+        </div>
+      </div>
+
+      <!-- Slots + Duration row -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="form-group">
+          <label>Server Slots</label>
+          <input type="number" id="f-slots" value="1" min="1" />
         </div>
         <div class="form-group">
-          <label>RAM (MB)</label>
-          <input type="number" id="f-ram" value="512" />
+          <label>
+            Duration (days)
+            <span class="duration-hint" id="duration-hint"></span>
+          </label>
+          <div style="position:relative">
+            <input type="number" id="f-duration" placeholder="∞ unlimited" min="1" oninput="updateDurationHint()" />
+            <span class="input-suffix" id="duration-suffix"></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Resources row -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="form-group">
+          <label>RAM per Slot (MB)</label>
+          <input type="number" id="f-ram" value="512" min="128" step="128" />
         </div>
         <div class="form-group">
           <label>CPU Limit (%)</label>
-          <input type="number" id="f-cpu" value="25" />
+          <input type="number" id="f-cpu" value="25" min="5" max="100" />
         </div>
       </div>
-      <div class="form-group">
-        <label>Description</label>
-        <input type="text" id="f-desc" placeholder="Short description..." />
+
+      <!-- Trial badge preview -->
+      <div id="plan-preview" class="plan-preview-row" style="display:none">
+        <span class="plan-preview-label">Preview:</span>
+        <span id="plan-preview-text"></span>
       </div>
     </div>
-    <div class="modal-actions" style="display:flex;gap:8px">
+
+    <div class="modal-actions" style="display:flex;gap:8px;margin-top:20px">
       <button class="btn btn-ghost" style="flex:1" onclick="closeModal()">Cancel</button>
-      <button class="btn btn-primary" style="flex:1" id="modal-submit" onclick="submitPlan()">Create</button>
+      <button class="btn btn-primary" style="flex:1" id="modal-submit" onclick="submitPlan()">Create Plan</button>
     </div>
   </div>
 </div>
@@ -61,35 +109,64 @@ let editId = null;
 
 const specIcon = {
   slots: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2"></rect><rect x="2" y="14" width="20" height="8" rx="2"></rect></svg>`,
-  ram: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="12" x2="2" y2="12"></line><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"></path></svg>`,
-  cpu: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"></rect><rect x="9" y="9" width="6" height="6"></rect></svg>`,
+  ram:   `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="12" x2="2" y2="12"></line><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"></path></svg>`,
+  cpu:   `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"></rect><rect x="9" y="9" width="6" height="6"></rect></svg>`,
+  time:  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>`,
+  taka:  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="9" x2="20" y2="9"></line><line x1="4" y1="15" x2="20" y2="15"></line><line x1="10" y1="3" x2="8" y2="21"></line><line x1="16" y1="3" x2="14" y2="21"></line></svg>`,
 };
 
+function fmtDuration(days) {
+  if (!days) return '∞ Unlimited';
+  if (days === 7) return '7-day Trial';
+  if (days === 30) return '30 days';
+  if (days % 30 === 0) return `${days/30} month${days/30 > 1 ? 's' : ''}`;
+  return `${days} days`;
+}
+
 function planCard(p) {
+  const isFree = !p.price_bdt && !p.price_per_month;
+  const isTrial = p.duration_days && p.duration_days <= 7;
+  const priceTag = p.price_bdt > 0
+    ? `<div class="plan-price-bdt">৳${p.price_bdt.toLocaleString()}</div><div class="plan-price-unit">per month</div>`
+    : `<div class="plan-price-num free">Free</div>`;
+
   return `
-  <div class="plan-card-big">
+  <div class="plan-card-big ${isTrial ? 'trial-card' : ''}">
     <div class="plan-top">
       <div>
-        <div class="plan-label">Plan</div>
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+          <div class="plan-label">Plan</div>
+          ${isTrial ? '<span class="trial-badge">Trial</span>' : ''}
+          ${isFree && !isTrial ? '<span class="free-badge">Free</span>' : ''}
+        </div>
         <div class="plan-title">${p.name}</div>
         ${p.description ? `<div class="plan-desc">${p.description}</div>` : ''}
       </div>
-      <div class="plan-price-big">
-        <div class="plan-price-num">$${p.price_per_month}</div>
-        <div class="plan-price-unit">/mo</div>
-      </div>
+      <div class="plan-price-big">${priceTag}</div>
     </div>
+
     <div class="plan-specs">
-      <div class="plan-spec" style="color:#8b5cf6">${specIcon.slots} ${p.max_slots} server slot${p.max_slots!==1?'s':''}</div>
-      <div class="plan-spec" style="color:#60a5fa">${specIcon.ram} ${(p.ram_mb/1024).toFixed(1)} GB RAM per slot</div>
-      <div class="plan-spec" style="color:#06b6d4">${specIcon.cpu} ${p.cpu_percent}% CPU limit</div>
+      <div class="plan-spec" style="color:#8b5cf6">${specIcon.slots}
+        <span>${p.max_slots} server slot${p.max_slots !== 1 ? 's' : ''}</span>
+      </div>
+      <div class="plan-spec" style="color:#60a5fa">${specIcon.ram}
+        <span>${p.ram_mb >= 1024 ? (p.ram_mb/1024).toFixed(1)+'GB' : p.ram_mb+'MB'} RAM per slot</span>
+      </div>
+      <div class="plan-spec" style="color:#06b6d4">${specIcon.cpu}
+        <span>${p.cpu_percent}% CPU limit</span>
+      </div>
+      <div class="plan-spec" style="color:${p.duration_days ? '#f59e0b' : '#555'}">${specIcon.time}
+        <span>${fmtDuration(p.duration_days)}</span>
+      </div>
+      ${p.price_bdt > 0 ? `<div class="plan-spec" style="color:#fbbf24">${specIcon.taka}<span>৳${p.price_bdt.toLocaleString()} / month</span></div>` : ''}
     </div>
+
     <div class="plan-actions">
       <button class="btn btn-edit" style="flex:1" onclick='openEdit(${JSON.stringify(p)})'>
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
         Edit
       </button>
-      <button class="btn btn-danger btn-icon" onclick="deletePlan(${p.id})">
+      <button class="btn btn-danger btn-icon" onclick="deletePlan(${p.id})" title="Delete plan">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"></path></svg>
       </button>
     </div>
@@ -98,50 +175,98 @@ function planCard(p) {
 
 async function loadPlans() {
   const grid = document.getElementById('plans-grid');
-  grid.innerHTML = `<div class="plan-card-big"><div class="skel" style="height:16px;width:50%;margin-bottom:8px"></div><div class="skel" style="height:28px;width:60%"></div></div>`.repeat(3);
   try {
     const plans = await api('/api/plans');
+    if (!plans.length) {
+      grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg><span>No plans yet</span><span style="font-size:11px">Create your first hosting plan</span></div>`;
+      return;
+    }
     grid.innerHTML = plans.map(planCard).join('');
   } catch(e) { toast('Failed to load plans'); }
 }
 
+function updateDurationHint() {
+  const val = +document.getElementById('f-duration').value;
+  const hint = document.getElementById('duration-hint');
+  const suf = document.getElementById('duration-suffix');
+  const preview = document.getElementById('plan-preview');
+  const previewText = document.getElementById('plan-preview-text');
+
+  if (!val || val <= 0) {
+    hint.textContent = '';
+    suf.textContent = '';
+    preview.style.display = 'none';
+    return;
+  }
+  hint.textContent = `= ${fmtDuration(val)}`;
+  suf.textContent = 'days';
+  preview.style.display = 'flex';
+
+  const name = document.getElementById('f-name').value || 'Plan';
+  const bdt = +document.getElementById('f-bdt').value;
+  const slots = +document.getElementById('f-slots').value || 1;
+  const isTrial = val <= 7;
+  previewText.innerHTML = `
+    <span class="plan-card-mini-preview">
+      ${name}
+      ${isTrial ? '<span class="trial-badge">Trial</span>' : ''}
+      · ${slots} slot${slots!==1?'s':''} · ${fmtDuration(val)}
+      ${bdt > 0 ? `· ৳${bdt.toLocaleString()}/mo` : '· Free'}
+    </span>`;
+}
+
 function openCreate() {
   editId = null;
-  document.getElementById('modal-title').textContent = 'Create Plan';
-  document.getElementById('modal-submit').textContent = 'Create';
-  ['f-name','f-desc'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('modal-title-text').textContent = 'Create Plan';
+  document.getElementById('modal-submit').textContent = 'Create Plan';
+  document.getElementById('f-name').value = '';
+  document.getElementById('f-desc').value = '';
+  document.getElementById('f-bdt').value = 0;
   document.getElementById('f-price').value = 0;
   document.getElementById('f-slots').value = 1;
+  document.getElementById('f-duration').value = '';
   document.getElementById('f-ram').value = 512;
   document.getElementById('f-cpu').value = 25;
+  document.getElementById('plan-preview').style.display = 'none';
+  document.getElementById('duration-hint').textContent = '';
   document.getElementById('plan-modal').classList.add('show');
+  setTimeout(() => document.getElementById('f-name').focus(), 80);
 }
 
 function openEdit(p) {
   editId = p.id;
-  document.getElementById('modal-title').textContent = 'Edit Plan';
-  document.getElementById('modal-submit').textContent = 'Save';
+  document.getElementById('modal-title-text').textContent = 'Edit Plan';
+  document.getElementById('modal-submit').textContent = 'Save Changes';
   document.getElementById('f-name').value = p.name;
-  document.getElementById('f-price').value = p.price_per_month;
+  document.getElementById('f-desc').value = p.description || '';
+  document.getElementById('f-bdt').value = p.price_bdt || 0;
+  document.getElementById('f-price').value = p.price_per_month || 0;
   document.getElementById('f-slots').value = p.max_slots;
+  document.getElementById('f-duration').value = p.duration_days || '';
   document.getElementById('f-ram').value = p.ram_mb;
   document.getElementById('f-cpu').value = p.cpu_percent;
-  document.getElementById('f-desc').value = p.description || '';
+  updateDurationHint();
   document.getElementById('plan-modal').classList.add('show');
 }
 
 function closeModal() { document.getElementById('plan-modal').classList.remove('show'); }
 
 async function submitPlan() {
+  const name = document.getElementById('f-name').value.trim();
+  if (!name) { document.getElementById('f-name').focus(); return; }
+  const durationVal = document.getElementById('f-duration').value;
   const body = {
-    name: document.getElementById('f-name').value.trim(),
-    maxSlots: +document.getElementById('f-slots').value,
-    pricePerMonth: +document.getElementById('f-price').value,
-    ramMB: +document.getElementById('f-ram').value,
-    cpuPercent: +document.getElementById('f-cpu').value,
+    name,
     description: document.getElementById('f-desc').value,
+    priceBdt: +document.getElementById('f-bdt').value || 0,
+    pricePerMonth: +document.getElementById('f-price').value || 0,
+    maxSlots: +document.getElementById('f-slots').value || 1,
+    durationDays: durationVal ? +durationVal : null,
+    ramMB: +document.getElementById('f-ram').value || 512,
+    cpuPercent: +document.getElementById('f-cpu').value || 25,
   };
-  if (!body.name) return;
+  const btn = document.getElementById('modal-submit');
+  btn.disabled = true; btn.textContent = 'Saving…';
   try {
     if (editId) {
       await api(`/api/plans/${editId}`, { method: 'PUT', body });
@@ -152,10 +277,11 @@ async function submitPlan() {
     }
     closeModal(); loadPlans();
   } catch(e) { toast('Failed: ' + e.message); }
+  finally { btn.disabled = false; btn.textContent = editId ? 'Save Changes' : 'Create Plan'; }
 }
 
 async function deletePlan(id) {
-  if (!confirm('Delete this plan?')) return;
+  if (!confirm('Delete this plan? Users on this plan will lose their allocation.')) return;
   try { await api(`/api/plans/${id}`, { method: 'DELETE' }); toast('Plan deleted'); loadPlans(); }
   catch(e) { toast('Failed: ' + e.message); }
 }
