@@ -13,14 +13,27 @@ from typing import Optional
 import db
 import auth as Auth
 
-BASE = os.environ.get("BASE_PATH", "/python-panel").rstrip("/")
+# ── Config ────────────────────────────────────────────────────────────────────
+# On Railway: BASE_PATH=/ (or leave unset → defaults to /)
+# On Replit:  BASE_PATH=/python-panel
+BASE = os.environ.get("BASE_PATH", "/").rstrip("/")
 PORT = int(os.environ.get("PORT", 5000))
+IS_PROD = os.environ.get("RAILWAY_ENVIRONMENT") is not None or os.environ.get("NODE_ENV") == "production"
 
-# SSE registry: server_id -> set of asyncio.Queue
+# Paths that don't require authentication
+def _public(path: str):
+    return (
+        path == f"{BASE}/login"
+        or path == f"{BASE}/signup"
+        or path == f"{BASE}/healthz"
+        or path.startswith(f"{BASE}/static")
+        or path.startswith(f"{BASE}/public")
+    )
+
+# SSE registry: server_id → set of asyncio.Queue
 sse_clients: dict[int, set[asyncio.Queue]] = {}
 
-PUBLIC_PATHS = [f"{BASE}/login", f"{BASE}/signup", f"{BASE}/static"]
-
+# ── Helpers ───────────────────────────────────────────────────────────────────
 async def broadcast_log(server_id: int, log: dict):
     if server_id in sse_clients:
         data = json.dumps(log)
@@ -35,18 +48,23 @@ def rand(a, b): return random.randint(a, b)
 def row_to_json(row: dict) -> dict:
     out = {}
     for k, v in row.items():
-        if isinstance(v, datetime):
-            out[k] = v.isoformat()
-        else:
-            out[k] = v
+        out[k] = v.isoformat() if isinstance(v, datetime) else v
     return out
 
+# ── Lifespan ──────────────────────────────────────────────────────────────────
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app):
     await db.get_pool()
+    await db.run_migrations()
     yield
 
-app = FastAPI(lifespan=lifespan)
+app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None)
+
+# ── Health check ──────────────────────────────────────────────────────────────
+@app.get(f"{BASE}/healthz")
+@app.get("/healthz")
+async def healthz():
+    return {"status": "ok"}
 
 # ── Auth middleware ───────────────────────────────────────────────────────────
 @app.middleware("http")
@@ -58,27 +76,33 @@ async def session_middleware(request: Request, call_next):
         if uid:
             user = await db.fetchone("SELECT * FROM users WHERE id=$1", uid)
     request.state.user = user
-
     path = request.url.path
-    is_public = any(path.startswith(p) for p in PUBLIC_PATHS) or path == f"{BASE}/login" or path == f"{BASE}/signup"
 
-    # Redirect to login if not authenticated (only for page routes, skip API/static)
-    if not is_public and user is None and not path.startswith(f"{BASE}/static"):
-        # Allow API routes to return 401 instead of redirect
+    if not _public(path) and user is None:
         if path.startswith(f"{BASE}/api/"):
             return JSONResponse({"detail": "Not authenticated"}, status_code=401)
-        return RedirectResponse(f"{BASE}/login", status_code=302)
+        login_url = f"{BASE}/login" if BASE else "/login"
+        return RedirectResponse(login_url, status_code=302)
 
-    # Admin-only routes
     if path.startswith(f"{BASE}/admin") and user and user.get("role") != "admin":
         return RedirectResponse(f"{BASE}/", status_code=302)
 
-    return await call_next(request)
+    response = await call_next(request)
+    if IS_PROD:
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    return response
 
-templates = Jinja2Templates(directory=os.path.join(os.path.dirname(__file__), "templates"))
-app.mount(f"{BASE}/static", StaticFiles(directory=os.path.join(os.path.dirname(__file__), "static")), name="static")
+# ── Static & Templates ────────────────────────────────────────────────────────
+_dir = os.path.dirname(os.path.abspath(__file__))
+templates = Jinja2Templates(directory=os.path.join(_dir, "templates"))
+app.mount(
+    f"{BASE}/static" if BASE else "/static",
+    StaticFiles(directory=os.path.join(_dir, "static")),
+    name="static",
+)
 
-# ── Template helper ───────────────────────────────────────────────────────────
 def tpl(request: Request, name: str, **kwargs):
     return templates.TemplateResponse(
         request=request, name=name,
@@ -102,7 +126,7 @@ async def do_login(request: Request, email: str = Form(...), password: str = For
         return tpl(request, "login.html", error="Invalid email or password.")
     token = Auth.create_token(user["id"])
     resp = RedirectResponse(f"{BASE}/", status_code=302)
-    resp.set_cookie(Auth.COOKIE, token, max_age=Auth.MAX_AGE, httponly=True, samesite="lax")
+    resp.set_cookie(Auth.COOKIE, token, max_age=Auth.MAX_AGE, httponly=True, samesite="lax", secure=IS_PROD)
     return resp
 
 @app.get(f"{BASE}/signup", response_class=HTMLResponse)
@@ -123,7 +147,7 @@ async def do_signup(
     existing = await db.fetchone("SELECT id FROM users WHERE email=$1", email)
     if existing:
         plans = await db.fetchall("SELECT * FROM plans ORDER BY price_per_month")
-        return tpl(request, "signup.html", plans=plans, error="An account with this email already exists.")
+        return tpl(request, "signup.html", plans=plans, error="Account with this email already exists.")
     pw_hash = Auth.hash_password(password)
     user = await db.fetchone(
         "INSERT INTO users(username,email,role,password_hash,plan_id) VALUES($1,$2,'user',$3,$4) RETURNING *",
@@ -131,7 +155,7 @@ async def do_signup(
     )
     token = Auth.create_token(user["id"])
     resp = RedirectResponse(f"{BASE}/", status_code=302)
-    resp.set_cookie(Auth.COOKIE, token, max_age=Auth.MAX_AGE, httponly=True, samesite="lax")
+    resp.set_cookie(Auth.COOKIE, token, max_age=Auth.MAX_AGE, httponly=True, samesite="lax", secure=IS_PROD)
     return resp
 
 @app.get(f"{BASE}/logout")
@@ -170,19 +194,18 @@ async def page_admin_servers(request: Request):
     return tpl(request, "admin/servers.html", active="allservers")
 
 # ══════════════════════════════════════════════════════════════════════════════
-# API — DASHBOARD
+# API — DASHBOARD / ME
 # ══════════════════════════════════════════════════════════════════════════════
 
 @app.get(f"{BASE}/api/me")
 async def api_me(request: Request):
     u = request.state.user
     if not u:
-        raise HTTPException(401, "Not authenticated")
+        raise HTTPException(401)
     row = await db.fetchone("""
-        SELECT u.*, p.name as plan_name, p.max_slots, p.price_per_month,
+        SELECT u.*, p.name as plan_name, p.max_slots, p.price_bdt, p.duration_days,
                (SELECT COUNT(*) FROM servers s WHERE s.user_id=u.id) as slots_used
-        FROM users u LEFT JOIN plans p ON u.plan_id=p.id
-        WHERE u.id=$1
+        FROM users u LEFT JOIN plans p ON u.plan_id=p.id WHERE u.id=$1
     """, u["id"])
     return row_to_json(row)
 
@@ -190,19 +213,17 @@ async def api_me(request: Request):
 async def api_stats():
     rows = await db.fetchall("SELECT status FROM servers")
     statuses = [r["status"] for r in rows]
-    ram = await db.fetchval("SELECT COALESCE(SUM(ram_used_mb),0) FROM servers") or 0
-    cpu = await db.fetchval("SELECT COALESCE(AVG(cpu_used),0) FROM servers WHERE status='running'") or 0
+    ram   = await db.fetchval("SELECT COALESCE(SUM(ram_used_mb),0) FROM servers") or 0
+    cpu   = await db.fetchval("SELECT COALESCE(AVG(cpu_used),0) FROM servers WHERE status='running'") or 0
     plans = await db.fetchval("SELECT COUNT(*) FROM plans") or 0
     users = await db.fetchval("SELECT COUNT(*) FROM users") or 0
     return {
-        "totalUsers": users,
+        "totalUsers": users, "totalPlans": plans,
         "totalServers": len(statuses),
         "runningServers": statuses.count("running"),
         "stoppedServers": statuses.count("stopped"),
         "errorServers": statuses.count("error"),
-        "totalPlans": plans,
-        "totalRamUsedMB": float(ram),
-        "avgCpuUsed": float(cpu),
+        "totalRamUsedMB": float(ram), "avgCpuUsed": float(cpu),
     }
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -212,7 +233,6 @@ async def api_stats():
 @app.get(f"{BASE}/api/servers")
 async def api_list_servers(request: Request, userId: Optional[int] = None):
     u = request.state.user
-    # non-admin users only see their own servers
     if u and u.get("role") != "admin":
         rows = await db.fetchall("SELECT * FROM servers WHERE user_id=$1 ORDER BY created_at DESC", u["id"])
     elif userId:
@@ -224,8 +244,7 @@ async def api_list_servers(request: Request, userId: Optional[int] = None):
 @app.get(f"{BASE}/api/servers/{{server_id}}")
 async def api_get_server(server_id: int):
     row = await db.fetchone("SELECT * FROM servers WHERE id=$1", server_id)
-    if not row:
-        raise HTTPException(404, "Server not found")
+    if not row: raise HTTPException(404, "Server not found")
     return row_to_json(row)
 
 class StatusBody(BaseModel):
@@ -234,39 +253,30 @@ class StatusBody(BaseModel):
 @app.put(f"{BASE}/api/servers/{{server_id}}/status")
 async def api_update_status(server_id: int, body: StatusBody):
     row = await db.fetchone("SELECT * FROM servers WHERE id=$1", server_id)
-    if not row:
-        raise HTTPException(404, "Server not found")
+    if not row: raise HTTPException(404)
     starting = body.status == "running"
     if starting:
         updated = await db.fetchone(
-            """UPDATE servers SET status='running', started_at=NOW(), ram_used_mb=$2, cpu_used=$3, uptime=0
-               WHERE id=$1 RETURNING *""",
+            "UPDATE servers SET status='running', started_at=NOW(), ram_used_mb=$2, cpu_used=$3, uptime=0 WHERE id=$1 RETURNING *",
             server_id, rand(128, 480), rand(5, 40)
         )
-        boot_logs = [
-            (server_id, f"▶ Initializing process runner...", "info"),
-            (server_id, f"✓ Environment variables loaded ({rand(8,24)} vars)", "info"),
-            (server_id, f"✓ Network interface bound to 0.0.0.0:{rand(3000,9999)}", "info"),
-            (server_id, f"✓ Server \"{row['name']}\" is now running", "info"),
-        ]
+        logs = [(server_id, "▶ Initializing process runner…", "info"),
+                (server_id, f"✓ Environment variables loaded ({rand(8,24)} vars)", "info"),
+                (server_id, f"✓ Bound to 0.0.0.0:{rand(3000,9999)}", "info"),
+                (server_id, f"✓ Server \"{row['name']}\" is now running", "info")]
     else:
         updated = await db.fetchone(
-            """UPDATE servers SET status='stopped', started_at=NULL, ram_used_mb=0, cpu_used=0, uptime=0
-               WHERE id=$1 RETURNING *""",
+            "UPDATE servers SET status='stopped', started_at=NULL, ram_used_mb=0, cpu_used=0, uptime=0 WHERE id=$1 RETURNING *",
             server_id
         )
-        boot_logs = [
-            (server_id, f"⏹ SIGTERM received — draining connections...", "warn"),
-            (server_id, f"✓ Server \"{row['name']}\" stopped gracefully", "info"),
-        ]
-
-    for sid, msg, lvl in boot_logs:
+        logs = [(server_id, "⏹ SIGTERM received — draining connections…", "warn"),
+                (server_id, f"✓ Server \"{row['name']}\" stopped gracefully", "info")]
+    for sid, msg, lvl in logs:
         log_row = await db.fetchone(
             "INSERT INTO console_logs(server_id,message,level) VALUES($1,$2,$3) RETURNING *",
             sid, msg, lvl
         )
         await broadcast_log(server_id, row_to_json(log_row))
-
     return row_to_json(updated)
 
 @app.delete(f"{BASE}/api/servers/{{server_id}}")
@@ -280,7 +290,7 @@ async def api_delete_server(server_id: int):
 # ══════════════════════════════════════════════════════════════════════════════
 
 @app.get(f"{BASE}/api/servers/{{server_id}}/logs")
-async def api_get_logs(server_id: int, limit: int = 200):
+async def api_get_logs(server_id: int, limit: int = 300):
     rows = await db.fetchall(
         "SELECT * FROM console_logs WHERE server_id=$1 ORDER BY timestamp DESC LIMIT $2",
         server_id, limit
@@ -289,9 +299,8 @@ async def api_get_logs(server_id: int, limit: int = 200):
 
 @app.get(f"{BASE}/api/servers/{{server_id}}/logs/stream")
 async def api_stream_logs(request: Request, server_id: int):
-    queue: asyncio.Queue = asyncio.Queue(maxsize=100)
+    queue: asyncio.Queue = asyncio.Queue(maxsize=200)
     sse_clients.setdefault(server_id, set()).add(queue)
-
     async def generator():
         try:
             while True:
@@ -304,7 +313,6 @@ async def api_stream_logs(request: Request, server_id: int):
                     yield {"comment": "heartbeat"}
         finally:
             sse_clients.get(server_id, set()).discard(queue)
-
     return EventSourceResponse(generator())
 
 class LogBody(BaseModel):
@@ -332,17 +340,17 @@ async def api_clear_logs(server_id: int):
 
 @app.get(f"{BASE}/api/plans")
 async def api_list_plans():
-    rows = await db.fetchall("SELECT * FROM plans ORDER BY price_per_month")
+    rows = await db.fetchall("SELECT * FROM plans ORDER BY price_bdt")
     return [row_to_json(r) for r in rows]
 
 class PlanBody(BaseModel):
     name: str
     maxSlots: int
-    pricePerMonth: int
+    pricePerMonth: int = 0
     priceBdt: int = 0
     durationDays: Optional[int] = None
-    ramMB: int
-    cpuPercent: int
+    ramMB: int = 512
+    cpuPercent: int = 25
     description: Optional[str] = ""
 
 @app.post(f"{BASE}/api/plans")
@@ -364,8 +372,7 @@ async def api_update_plan(plan_id: int, body: PlanBody):
         plan_id, body.name, body.maxSlots, body.pricePerMonth, body.priceBdt,
         body.durationDays, body.ramMB, body.cpuPercent, body.description
     )
-    if not row:
-        raise HTTPException(404, "Plan not found")
+    if not row: raise HTTPException(404, "Plan not found")
     return row_to_json(row)
 
 @app.delete(f"{BASE}/api/plans/{{plan_id}}")
@@ -385,8 +392,7 @@ async def api_list_users():
                p.name as plan_name, p.max_slots, p.price_per_month, p.price_bdt, p.duration_days,
                (SELECT COUNT(*) FROM servers s WHERE s.user_id=u.id) as slots_used,
                (SELECT COUNT(*) FROM servers s WHERE s.user_id=u.id AND s.status='running') as slots_running
-        FROM users u LEFT JOIN plans p ON u.plan_id=p.id
-        ORDER BY u.id
+        FROM users u LEFT JOIN plans p ON u.plan_id=p.id ORDER BY u.id
     """)
     return [row_to_json(r) for r in rows]
 
@@ -394,26 +400,22 @@ async def api_list_users():
 async def api_get_user(user_id: int):
     row = await db.fetchone("""
         SELECT u.id, u.username, u.email, u.role, u.plan_id, u.created_at,
-               p.name as plan_name, p.max_slots, p.price_per_month,
+               p.name as plan_name, p.max_slots, p.price_bdt,
                (SELECT COUNT(*) FROM servers s WHERE s.user_id=u.id) as slots_used
-        FROM users u LEFT JOIN plans p ON u.plan_id=p.id
-        WHERE u.id=$1
+        FROM users u LEFT JOIN plans p ON u.plan_id=p.id WHERE u.id=$1
     """, user_id)
-    if not row:
-        raise HTTPException(404, "User not found")
+    if not row: raise HTTPException(404, "User not found")
     return row_to_json(row)
 
 class UserUpdateBody(BaseModel):
     planId: Optional[int] = None
     role: Optional[str] = None
-    paymentBdt: Optional[int] = None   # how much paid in ৳
-    paymentDays: Optional[int] = None  # how many days granted
+    paymentBdt: Optional[int] = None
+    paymentDays: Optional[int] = None
 
 @app.put(f"{BASE}/api/users/{{user_id}}")
 async def api_update_user(user_id: int, body: UserUpdateBody):
     from datetime import datetime as dt, timedelta
-
-    # Calculate expiry: days input > plan default duration > None
     expires = None
     if body.paymentDays and body.paymentDays > 0:
         expires = dt.utcnow() + timedelta(days=body.paymentDays)
@@ -421,27 +423,18 @@ async def api_update_user(user_id: int, body: UserUpdateBody):
         plan = await db.fetchone("SELECT duration_days FROM plans WHERE id=$1", body.planId)
         if plan and plan.get("duration_days"):
             expires = dt.utcnow() + timedelta(days=plan["duration_days"])
-
     payment_date = dt.utcnow() if (body.paymentBdt and body.paymentBdt > 0) else None
-
     row = await db.fetchone(
-        """UPDATE users
-           SET plan_id=$2,
-               role=COALESCE($3::user_role, role),
-               plan_expires_at=$4,
-               last_payment_bdt=COALESCE($5, last_payment_bdt),
-               last_payment_days=COALESCE($6, last_payment_days),
-               last_payment_date=COALESCE($7, last_payment_date)
+        """UPDATE users SET plan_id=$2, role=COALESCE($3::user_role,role), plan_expires_at=$4,
+           last_payment_bdt=COALESCE($5,last_payment_bdt),
+           last_payment_days=COALESCE($6,last_payment_days),
+           last_payment_date=COALESCE($7,last_payment_date)
            WHERE id=$1
-           RETURNING id, username, email, role, plan_id, plan_expires_at,
-                     last_payment_bdt, last_payment_days, last_payment_date""",
+           RETURNING id,username,email,role,plan_id,plan_expires_at,last_payment_bdt,last_payment_days,last_payment_date""",
         user_id, body.planId, body.role, expires,
-        body.paymentBdt if body.paymentBdt else None,
-        body.paymentDays if body.paymentDays else None,
-        payment_date
+        body.paymentBdt or None, body.paymentDays or None, payment_date
     )
-    if not row:
-        raise HTTPException(404, "User not found")
+    if not row: raise HTTPException(404, "User not found")
     return row_to_json(row)
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -450,4 +443,13 @@ async def api_update_user(user_id: int, body: UserUpdateBody):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=PORT, reload=False)
+    workers = int(os.environ.get("WEB_CONCURRENCY", 1))
+    uvicorn.run(
+        "main:app",
+        host="0.0.0.0",
+        port=PORT,
+        workers=workers,
+        proxy_headers=True,        # trust Railway's reverse proxy
+        forwarded_allow_ips="*",   # accept X-Forwarded-For
+        access_log=not IS_PROD,    # quiet in production
+    )
