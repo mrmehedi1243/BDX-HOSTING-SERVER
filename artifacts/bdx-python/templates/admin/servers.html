@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}All Servers — BDX Hosting{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title">All Servers</h1>
+  <p class="page-sub">Global view of every deployed slot across all users.</p>
+</div>
+
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>Server</th>
+        <th>User</th>
+        <th>Status</th>
+        <th>RAM</th>
+        <th>CPU</th>
+        <th>Uptime</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody id="servers-body">
+      <tr><td colspan="7" style="text-align:center;color:var(--text3);padding:32px">Loading...</td></tr>
+    </tbody>
+  </table>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function formatUptime(sec) {
+  if (!sec) return '—';
+  const h = Math.floor(sec/3600), m = Math.floor((sec%3600)/60);
+  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+}
+
+async function loadServers() {
+  const tbody = document.getElementById('servers-body');
+  try {
+    const servers = await api('/api/servers');
+    if (!servers.length) {
+      tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:32px">No servers deployed</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = servers.map(s => `
+      <tr>
+        <td>
+          <div style="display:flex;align-items:center;gap:8px">
+            <div style="width:6px;height:6px;border-radius:50%;background:${s.status==='running'?'#10b981':'#444'};flex-shrink:0"></div>
+            <span style="font-size:13px;font-weight:500">${s.name}</span>
+          </div>
+        </td>
+        <td style="color:var(--text3);font-family:var(--mono);font-size:12px">#${s.user_id}</td>
+        <td><span class="status-pill ${s.status}">${s.status}</span></td>
+        <td style="font-size:12px;color:var(--text2)">${s.ram_used_mb} MB</td>
+        <td style="font-size:12px;color:var(--text2)">${s.cpu_used}%</td>
+        <td style="font-size:12px;color:var(--text3)">${formatUptime(s.uptime)}</td>
+        <td>
+          <button class="btn btn-icon" style="color:var(--text3)" onmouseenter="this.style.color='var(--red)';this.style.background='var(--red-bg)'" onmouseleave="this.style.color='var(--text3)';this.style.background=''" onclick="deleteServer(${s.id})">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"></path></svg>
+          </button>
+        </td>
+      </tr>`).join('');
+  } catch(e) { tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--text3)">Failed to load</td></tr>`; }
+}
+
+async function deleteServer(id) {
+  if (!confirm('Forcibly delete this server? The user will lose this slot.')) return;
+  try {
+    await api(`/api/servers/${id}`, { method: 'DELETE' });
+    toast('Server deleted'); loadServers();
+  } catch(e) { toast('Failed: ' + e.message); }
+}
+
+loadServers();
+setInterval(loadServers, 30000);
+</script>
+{% endblock %}

@@ -1,0 +1,221 @@
+{% extends "base.html" %}
+{% block title %}Console — BDX Hosting{% endblock %}
+
+{% block content %}
+<div class="console-shell">
+  <!-- Top bar -->
+  <div class="console-topbar">
+    <div class="console-title">
+      <a href="{{ base }}/servers" class="back-btn">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+      </a>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="2"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg>
+      <span class="console-title-text" id="srv-name">Loading...</span>
+      <span class="status-pill stopped" id="srv-status" style="font-size:10px">—</span>
+    </div>
+    <div class="console-actions">
+      <div class="live-badge offline" id="live-badge">
+        <div class="live-dot"></div>
+        <span id="live-text">Offline</span>
+      </div>
+      <button class="btn btn-ghost" onclick="openInjectModal()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="16"></line><line x1="8" y1="12" x2="16" y2="12"></line></svg>
+        Inject Log
+      </button>
+      <button class="btn btn-danger" onclick="clearLogs()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"></path></svg>
+        Clear
+      </button>
+    </div>
+  </div>
+
+  <!-- Terminal -->
+  <div class="term-wrap">
+    <div class="term-chrome">
+      <div class="term-dots">
+        <div class="term-dot r"></div>
+        <div class="term-dot y"></div>
+        <div class="term-dot g"></div>
+      </div>
+      <span class="term-chrome-title" id="term-title">— console output</span>
+      <div class="streaming-badge" id="stream-badge" style="display:none">
+        <div class="stream-dot"></div>streaming
+      </div>
+    </div>
+    <div class="term-body" id="term-body">
+      <div class="term-empty" id="term-empty" style="display:none">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg>
+        <span>No log output</span>
+        <span style="font-size:11px;opacity:.5">Start the server to see output here</span>
+      </div>
+    </div>
+    <div class="term-prompt">
+      <span class="term-ps">$</span>
+      <span class="term-cmd">read-only terminal</span>
+      <span class="term-count" id="term-count">0 entries</span>
+    </div>
+  </div>
+</div>
+
+<!-- Inject modal -->
+<div class="modal-overlay" id="inject-modal">
+  <div class="modal">
+    <div class="modal-title">Inject Log Entry</div>
+    <div class="form-grid">
+      <div class="form-group">
+        <label>Message</label>
+        <input type="text" id="inj-msg" placeholder="Enter log message..." onkeydown="if(event.key==='Enter')submitInject()" />
+      </div>
+      <div class="form-group">
+        <label>Level</label>
+        <select id="inj-level">
+          <option value="info">info</option>
+          <option value="warn">warn</option>
+          <option value="error">error</option>
+          <option value="debug">debug</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-actions" style="display:flex;gap:8px">
+      <button class="btn btn-ghost" style="flex:1" onclick="closeModal('inject-modal')">Cancel</button>
+      <button class="btn btn-primary" style="flex:1" onclick="submitInject()">Inject</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const SERVER_ID = {{ server_id }};
+let allLogs = new Map(); // id -> log
+let autoScroll = true;
+let es = null;
+
+function logLine(log) {
+  const ts = new Date(log.timestamp);
+  const time = ts.toTimeString().slice(0, 8);
+  const lvl = log.level || 'info';
+  return `<div class="log-line" data-id="${log.id}">
+    <span class="log-ts">${time}</span>
+    <span class="log-lvl ${lvl}">${lvl.toUpperCase().padEnd(5,' ')}</span>
+    <span class="log-msg">${escHtml(log.message)}</span>
+  </div>`;
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function renderLogs() {
+  const body = document.getElementById('term-body');
+  const empty = document.getElementById('term-empty');
+  const sorted = Array.from(allLogs.values()).sort((a,b) => new Date(a.timestamp) - new Date(b.timestamp));
+  if (sorted.length === 0) {
+    empty.style.display = 'flex';
+    body.innerHTML = '';
+    body.appendChild(empty);
+  } else {
+    empty.style.display = 'none';
+    body.innerHTML = sorted.map(logLine).join('');
+  }
+  document.getElementById('term-count').textContent = `${sorted.length} entries`;
+  if (autoScroll) body.scrollTop = body.scrollHeight;
+}
+
+function addLog(log) {
+  if (!allLogs.has(log.id)) {
+    allLogs.set(log.id, log);
+    renderLogs();
+  }
+}
+
+document.getElementById('term-body').addEventListener('scroll', e => {
+  const el = e.target;
+  autoScroll = el.scrollHeight - el.scrollTop - el.clientHeight < 60;
+});
+
+async function loadServer() {
+  try {
+    const s = await api(`/api/servers/${SERVER_ID}`);
+    document.getElementById('srv-name').textContent = s.name;
+    const pill = document.getElementById('srv-status');
+    pill.textContent = s.status;
+    pill.className = `status-pill ${s.status}`;
+    document.getElementById('term-title').textContent = `${s.name}  —  console output`;
+  } catch(e) {}
+}
+
+async function loadLogs() {
+  try {
+    const logs = await api(`/api/servers/${SERVER_ID}/logs?limit=200`);
+    logs.forEach(l => allLogs.set(l.id, l));
+    renderLogs();
+  } catch(e) {}
+}
+
+function connectSSE() {
+  if (es) es.close();
+  const badge = document.getElementById('live-badge');
+  const text = document.getElementById('live-text');
+  const streamBadge = document.getElementById('stream-badge');
+
+  es = new EventSource(`${BASE}/api/servers/${SERVER_ID}/logs/stream`);
+
+  es.onopen = () => {
+    badge.className = 'live-badge connected';
+    text.textContent = 'Live';
+    streamBadge.style.display = 'flex';
+  };
+  es.onerror = () => {
+    badge.className = 'live-badge offline';
+    text.textContent = 'Offline';
+    streamBadge.style.display = 'none';
+    // Reconnect after 3s
+    setTimeout(connectSSE, 3000);
+  };
+  es.onmessage = e => {
+    try {
+      const log = JSON.parse(e.data);
+      addLog(log);
+    } catch {}
+  };
+}
+
+async function clearLogs() {
+  if (!confirm('Clear all logs?')) return;
+  try {
+    await api(`/api/servers/${SERVER_ID}/logs`, { method: 'DELETE' });
+    allLogs.clear();
+    renderLogs();
+    toast('Logs cleared');
+  } catch(e) { toast('Failed to clear logs'); }
+}
+
+function openInjectModal() {
+  document.getElementById('inj-msg').value = '';
+  document.getElementById('inject-modal').classList.add('show');
+  setTimeout(() => document.getElementById('inj-msg').focus(), 100);
+}
+function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+
+async function submitInject() {
+  const msg = document.getElementById('inj-msg').value.trim();
+  const level = document.getElementById('inj-level').value;
+  if (!msg) return;
+  try {
+    await api(`/api/servers/${SERVER_ID}/logs`, { method: 'POST', body: { message: msg, level } });
+    closeModal('inject-modal');
+    toast('Log injected');
+  } catch(e) { toast('Failed: ' + e.message); }
+}
+
+// Close modal on overlay click
+document.getElementById('inject-modal').addEventListener('click', e => {
+  if (e.target === e.currentTarget) closeModal('inject-modal');
+});
+
+loadServer();
+loadLogs();
+connectSSE();
+</script>
+{% endblock %}

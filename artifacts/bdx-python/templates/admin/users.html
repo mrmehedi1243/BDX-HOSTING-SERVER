@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+{% block title %}Users — BDX Hosting{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title">Users</h1>
+  <p class="page-sub">Manage user accounts, plans, and roles.</p>
+</div>
+
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>User</th>
+        <th>Plan</th>
+        <th>Slots</th>
+        <th>Role</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody id="users-body">
+      <tr><td colspan="5" style="text-align:center;color:var(--text3);padding:32px">Loading...</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- Edit user modal -->
+<div class="modal-overlay" id="user-modal">
+  <div class="modal">
+    <div class="modal-title">Edit User</div>
+    <div id="user-modal-info" style="background:rgba(255,255,255,.02);border:1px solid var(--border);border-radius:6px;padding:12px;margin-bottom:16px;display:flex;align-items:center;gap:10px">
+      <div class="user-avatar" id="um-avatar">?</div>
+      <div>
+        <div id="um-name" style="font-size:13px;font-weight:500"></div>
+        <div id="um-email" style="font-size:11px;color:var(--text3)"></div>
+      </div>
+    </div>
+    <div class="form-grid">
+      <div class="form-group">
+        <label>Assign Plan</label>
+        <select id="um-plan">
+          <option value="">No Plan</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Role</label>
+        <select id="um-role">
+          <option value="user">user</option>
+          <option value="admin">admin</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-actions" style="display:flex;gap:8px">
+      <button class="btn btn-ghost" style="flex:1" onclick="closeUserModal()">Cancel</button>
+      <button class="btn btn-primary" style="flex:1" onclick="saveUser()">Save Changes</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let editUserId = null;
+let plans = [];
+
+async function loadPlansForModal() {
+  try {
+    plans = await api('/api/plans');
+  } catch(e) {}
+}
+
+function slotBar(used, max) {
+  const pct = max > 0 ? (used/max)*100 : 0;
+  return `<div style="display:flex;flex-direction:column;gap:3px">
+    <div class="bar-track" style="width:80px"><div class="bar-fill" style="width:${pct}%"></div></div>
+    <span style="font-size:10px;color:var(--text3)">${used} / ${max} slots</span>
+  </div>`;
+}
+
+async function loadUsers() {
+  const tbody = document.getElementById('users-body');
+  try {
+    const users = await api('/api/users');
+    tbody.innerHTML = users.map(u => `
+      <tr>
+        <td>
+          <div style="display:flex;align-items:center;gap:10px">
+            <div class="user-avatar">${(u.username||'?')[0].toUpperCase()}</div>
+            <div>
+              <div style="font-size:13px;font-weight:500">${u.username}</div>
+              <div style="font-size:11px;color:var(--text3)">${u.email}</div>
+            </div>
+          </div>
+        </td>
+        <td>
+          ${u.plan_name ? `<span style="display:flex;align-items:center;gap:6px;font-size:13px"><span style="width:6px;height:6px;border-radius:50%;background:#8b5cf6;display:inline-block"></span>${u.plan_name}</span>` : '<span style="color:var(--text3)">—</span>'}
+        </td>
+        <td>${slotBar(u.slots_used||0, u.max_slots||0)}</td>
+        <td><span class="role-badge ${u.role}">${u.role}</span></td>
+        <td>
+          <button class="btn btn-icon btn-ghost" onclick='openEditUser(${JSON.stringify(u)})'>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+          </button>
+        </td>
+      </tr>`).join('');
+  } catch(e) { tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--text3)">Failed to load</td></tr>`; }
+}
+
+function openEditUser(u) {
+  editUserId = u.id;
+  document.getElementById('um-avatar').textContent = (u.username||'?')[0].toUpperCase();
+  document.getElementById('um-name').textContent = u.username;
+  document.getElementById('um-email').textContent = u.email;
+
+  const sel = document.getElementById('um-plan');
+  sel.innerHTML = '<option value="">No Plan</option>' + plans.map(p => `<option value="${p.id}" ${u.plan_id==p.id?'selected':''}>${p.name} — $${p.price_per_month}/mo</option>`).join('');
+
+  document.getElementById('um-role').value = u.role;
+  document.getElementById('user-modal').classList.add('show');
+}
+
+function closeUserModal() { document.getElementById('user-modal').classList.remove('show'); }
+
+async function saveUser() {
+  const planId = document.getElementById('um-plan').value;
+  const role = document.getElementById('um-role').value;
+  try {
+    await api(`/api/users/${editUserId}`, { method: 'PUT', body: { planId: planId ? +planId : null, role } });
+    toast('User updated'); closeUserModal(); loadUsers();
+  } catch(e) { toast('Failed: ' + e.message); }
+}
+
+document.getElementById('user-modal').addEventListener('click', e => { if(e.target===e.currentTarget) closeUserModal(); });
+
+loadPlansForModal();
+loadUsers();
+</script>
+{% endblock %}

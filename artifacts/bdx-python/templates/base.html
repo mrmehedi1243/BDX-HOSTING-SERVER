@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{% block title %}BDX Hosting{% endblock %}</title>
+  <link rel="stylesheet" href="{{ base }}/static/style.css" />
+</head>
+<body>
+<div class="shell">
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="logo">
+      <div class="logo-icon">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+      </div>
+      <span class="logo-text">BDX Hosting</span>
+    </div>
+
+    <nav>
+      <div>
+        <div class="nav-section-label">Platform</div>
+        <div class="nav-links">
+          <a href="{{ base }}/" class="nav-link {% if active == 'dashboard' %}active{% endif %}">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+            Dashboard
+          </a>
+          <a href="{{ base }}/servers" class="nav-link {% if active == 'servers' %}active{% endif %}">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect><rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect><line x1="6" y1="6" x2="6.01" y2="6"></line><line x1="6" y1="18" x2="6.01" y2="18"></line></svg>
+            My Servers
+          </a>
+        </div>
+      </div>
+      <div>
+        <div class="nav-section-label">Admin</div>
+        <div class="nav-links">
+          <a href="{{ base }}/admin/plans" class="nav-link {% if active == 'plans' %}active{% endif %}">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>
+            Plans
+          </a>
+          <a href="{{ base }}/admin/users" class="nav-link {% if active == 'users' %}active{% endif %}">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+            Users
+          </a>
+          <a href="{{ base }}/admin/servers" class="nav-link {% if active == 'allservers' %}active{% endif %}">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="12" x2="2" y2="12"></line><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"></path><line x1="6" y1="16" x2="6.01" y2="16"></line><line x1="10" y1="16" x2="10.01" y2="16"></line></svg>
+            All Servers
+          </a>
+        </div>
+      </div>
+    </nav>
+
+    <div class="plan-widget">
+      <div class="plan-card" id="plan-widget">
+        <div class="plan-card-top">
+          <div class="plan-name-row"><div class="plan-dot"></div><span id="pw-name">—</span></div>
+          <span class="plan-price" id="pw-price"></span>
+        </div>
+        <div class="plan-bar-row">
+          <div class="plan-bar-labels"><span>Slots</span><span id="pw-slots">—</span></div>
+          <div class="bar-track"><div class="bar-fill" id="pw-bar" style="width:0%"></div></div>
+        </div>
+        <div class="plan-footer"><span id="pw-user">—</span><span id="pw-role">—</span></div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <main class="main">
+    <div class="main-inner">
+      {% block content %}{% endblock %}
+    </div>
+  </main>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const BASE = "{{ base }}";
+const CURRENT_USER_ID = 2;
+
+function toast(msg, duration = 2500) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), duration);
+}
+
+async function api(path, opts = {}) {
+  const res = await fetch(BASE + path, {
+    headers: { 'Content-Type': 'application/json' },
+    ...opts,
+    body: opts.body ? JSON.stringify(opts.body) : undefined,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || 'Request failed');
+  }
+  return res.json();
+}
+
+// Load plan widget
+async function loadPlanWidget() {
+  try {
+    const u = await api(`/api/users/${CURRENT_USER_ID}`);
+    document.getElementById('pw-name').textContent = u.plan_name || 'No Plan';
+    document.getElementById('pw-price').textContent = u.plan_name ? `$${u.price_per_month}/mo` : '';
+    const max = u.max_slots || 0;
+    const used = u.slots_used || 0;
+    document.getElementById('pw-slots').textContent = `${used} / ${max}`;
+    document.getElementById('pw-bar').style.width = max > 0 ? `${(used/max)*100}%` : '0%';
+    document.getElementById('pw-user').textContent = u.username || '';
+    document.getElementById('pw-role').textContent = u.role || '';
+  } catch(e) {}
+}
+loadPlanWidget();
+</script>
+{% block scripts %}{% endblock %}
+</body>
+</html>
