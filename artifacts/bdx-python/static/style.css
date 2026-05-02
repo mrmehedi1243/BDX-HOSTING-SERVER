@@ -44,7 +44,50 @@ input, select, textarea { font-family: var(--font); }
   display: flex; flex-direction: column;
   background: var(--sidebar);
   border-right: 1px solid var(--border);
+  transition: width .22s cubic-bezier(.4,0,.2,1), min-width .22s cubic-bezier(.4,0,.2,1);
+  overflow: hidden;
 }
+.sidebar.collapsed { width: 52px; min-width: 52px; }
+
+/* ── Sidebar toggle button ─────────────────────────── */
+.sidebar-toggle {
+  margin-left: auto; flex-shrink: 0;
+  width: 26px; height: 26px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 5px; color: var(--text3);
+  transition: background .12s, color .12s;
+}
+.sidebar-toggle:hover { background: rgba(255,255,255,.07); color: var(--text2); }
+
+/* ── Sidebar tooltip (icon-only mode) ──────────────────── */
+#sidebar-tip {
+  position: fixed; z-index: 300;
+  background: #1e1e1e; border: 1px solid #2a2a2a;
+  color: var(--text); font-size: 12px; font-weight: 500;
+  padding: 5px 10px; border-radius: 5px;
+  pointer-events: none; white-space: nowrap;
+  opacity: 0; transform: translateX(-4px); transition: opacity .12s, transform .12s;
+}
+#sidebar-tip.show { opacity: 1; transform: translateX(0); }
+
+/* ── Collapsed nav text transitions ────────────────────── */
+.nav-label {
+  transition: opacity .18s, width .18s;
+  white-space: nowrap;
+}
+.nav-section-label { transition: opacity .18s; white-space: nowrap; }
+#logo-text { transition: opacity .18s, width .18s; white-space: nowrap; }
+
+/* ── Plan widget collapsed ─────────────────────────────── */
+.plan-widget-mini {
+  padding: 14px 0; border-top: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: center;
+}
+
+/* ── Collapsed link centering ───────────────────────────── */
+.sidebar.collapsed .nav-link { justify-content: center; padding: 8px 0; }
+.sidebar.collapsed .logo { justify-content: center; padding: 0; gap: 0; }
+.sidebar.collapsed .sidebar-toggle { margin: 0; }
 
 .logo {
   height: 56px; display: flex; align-items: center; gap: 10px;

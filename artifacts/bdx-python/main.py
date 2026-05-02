@@ -49,8 +49,10 @@ templates = Jinja2Templates(directory=os.path.join(os.path.dirname(__file__), "t
 app.mount(f"{BASE}/static", StaticFiles(directory=os.path.join(os.path.dirname(__file__), "static")), name="static")
 
 # ─── Template context helper ──────────────────────────────────────────────────
-def ctx(request: Request, **kwargs):
-    return {"request": request, "base": BASE, **kwargs}
+def tpl(request: Request, name: str, **kwargs):
+    return templates.TemplateResponse(
+        request=request, name=name, context={"base": BASE, **kwargs}
+    )
 
 # ══════════════════════════════════════════════════════════════════════════════
 # HTML PAGES
@@ -59,27 +61,27 @@ def ctx(request: Request, **kwargs):
 @app.get(f"{BASE}/", response_class=HTMLResponse)
 @app.get(f"{BASE}", response_class=HTMLResponse)
 async def page_dashboard(request: Request):
-    return templates.TemplateResponse("index.html", ctx(request))
+    return tpl(request, "index.html")
 
 @app.get(f"{BASE}/servers", response_class=HTMLResponse)
 async def page_servers(request: Request):
-    return templates.TemplateResponse("servers.html", ctx(request))
+    return tpl(request, "servers.html")
 
 @app.get(f"{BASE}/console/{{server_id}}", response_class=HTMLResponse)
 async def page_console(request: Request, server_id: int):
-    return templates.TemplateResponse("console.html", ctx(request, server_id=server_id))
+    return tpl(request, "console.html", server_id=server_id)
 
 @app.get(f"{BASE}/admin/plans", response_class=HTMLResponse)
 async def page_plans(request: Request):
-    return templates.TemplateResponse("admin/plans.html", ctx(request))
+    return tpl(request, "admin/plans.html")
 
 @app.get(f"{BASE}/admin/users", response_class=HTMLResponse)
 async def page_users(request: Request):
-    return templates.TemplateResponse("admin/users.html", ctx(request))
+    return tpl(request, "admin/users.html")
 
 @app.get(f"{BASE}/admin/servers", response_class=HTMLResponse)
 async def page_admin_servers(request: Request):
-    return templates.TemplateResponse("admin/servers.html", ctx(request))
+    return tpl(request, "admin/servers.html")
 
 # ══════════════════════════════════════════════════════════════════════════════
 # API — DASHBOARD
