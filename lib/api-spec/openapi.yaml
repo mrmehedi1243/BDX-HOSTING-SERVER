@@ -3,20 +3,30 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: BDX Hosting Panel API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: plans
+    description: Hosting plans management
+  - name: users
+    description: User management
+  - name: servers
+    description: Server/slot management
+  - name: logs
+    description: Console log management
+  - name: dashboard
+    description: Dashboard statistics
+
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,6 +34,389 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /plans:
+    get:
+      operationId: listPlans
+      tags: [plans]
+      summary: List all hosting plans
+      responses:
+        "200":
+          description: List of plans
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Plan"
+    post:
+      operationId: createPlan
+      tags: [plans]
+      summary: Create a new hosting plan (admin)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePlanBody"
+      responses:
+        "201":
+          description: Plan created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Plan"
+
+  /plans/{id}:
+    get:
+      operationId: getPlan
+      tags: [plans]
+      summary: Get a single plan
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Plan details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Plan"
+    put:
+      operationId: updatePlan
+      tags: [plans]
+      summary: Update a plan (admin)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePlanBody"
+      responses:
+        "200":
+          description: Updated plan
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Plan"
+    delete:
+      operationId: deletePlan
+      tags: [plans]
+      summary: Delete a plan (admin)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+
+  /users:
+    get:
+      operationId: listUsers
+      tags: [users]
+      summary: List all users (admin)
+      responses:
+        "200":
+          description: List of users with plan info
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/UserWithPlan"
+    post:
+      operationId: createUser
+      tags: [users]
+      summary: Create a new user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateUserBody"
+      responses:
+        "201":
+          description: User created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserWithPlan"
+
+  /users/{id}:
+    get:
+      operationId: getUser
+      tags: [users]
+      summary: Get a user with plan and server stats
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: User details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserWithPlan"
+    put:
+      operationId: updateUser
+      tags: [users]
+      summary: Update user (admin - assign plan, change role)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateUserBody"
+      responses:
+        "200":
+          description: Updated user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserWithPlan"
+    delete:
+      operationId: deleteUser
+      tags: [users]
+      summary: Delete a user (admin)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+
+  /servers:
+    get:
+      operationId: listServers
+      tags: [servers]
+      summary: List servers (optionally filter by userId)
+      parameters:
+        - name: userId
+          in: query
+          required: false
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of servers
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Server"
+    post:
+      operationId: createServer
+      tags: [servers]
+      summary: Create (deploy) a new server/slot
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateServerBody"
+      responses:
+        "201":
+          description: Server created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Server"
+
+  /servers/{id}:
+    get:
+      operationId: getServer
+      tags: [servers]
+      summary: Get server details
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Server details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Server"
+    delete:
+      operationId: deleteServer
+      tags: [servers]
+      summary: Delete a server
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+
+  /servers/{id}/status:
+    put:
+      operationId: updateServerStatus
+      tags: [servers]
+      summary: Start or stop a server
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateServerStatusBody"
+      responses:
+        "200":
+          description: Updated server
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Server"
+
+  /servers/{id}/logs:
+    get:
+      operationId: getServerLogs
+      tags: [logs]
+      summary: Get console logs for a server
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 100
+      responses:
+        "200":
+          description: Console log entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ConsoleLog"
+    post:
+      operationId: addServerLog
+      tags: [logs]
+      summary: Add a console log entry
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddLogBody"
+      responses:
+        "201":
+          description: Log added
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConsoleLog"
+
+  /servers/{id}/logs/clear:
+    delete:
+      operationId: clearServerLogs
+      tags: [logs]
+      summary: Clear all logs for a server
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Logs cleared
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+
+  /dashboard/stats:
+    get:
+      operationId: getDashboardStats
+      tags: [dashboard]
+      summary: Get overall platform statistics
+      responses:
+        "200":
+          description: Platform stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardStats"
+
+  /dashboard/user-stats/{userId}:
+    get:
+      operationId: getUserStats
+      tags: [dashboard]
+      summary: Get stats for a specific user
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: User stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserStats"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +427,274 @@ components:
       required:
         - status
 
+    MessageResponse:
+      type: object
+      properties:
+        message:
+          type: string
+      required:
+        - message
+
+    Plan:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        maxSlots:
+          type: integer
+        pricePerMonth:
+          type: number
+        ramMB:
+          type: integer
+        cpuPercent:
+          type: integer
+        description:
+          type: string
+        createdAt:
+          type: string
+      required:
+        - id
+        - name
+        - maxSlots
+        - pricePerMonth
+        - ramMB
+        - cpuPercent
+        - createdAt
+
+    CreatePlanBody:
+      type: object
+      properties:
+        name:
+          type: string
+        maxSlots:
+          type: integer
+        pricePerMonth:
+          type: number
+        ramMB:
+          type: integer
+        cpuPercent:
+          type: integer
+        description:
+          type: string
+      required:
+        - name
+        - maxSlots
+        - pricePerMonth
+        - ramMB
+        - cpuPercent
+
+    UserWithPlan:
+      type: object
+      properties:
+        id:
+          type: integer
+        username:
+          type: string
+        email:
+          type: string
+        role:
+          type: string
+          enum: [admin, user]
+        planId:
+          type: integer
+          nullable: true
+        plan:
+          $ref: "#/components/schemas/Plan"
+          nullable: true
+        createdAt:
+          type: string
+        slotsUsed:
+          type: integer
+        slotsRunning:
+          type: integer
+      required:
+        - id
+        - username
+        - email
+        - role
+        - createdAt
+        - slotsUsed
+        - slotsRunning
+
+    CreateUserBody:
+      type: object
+      properties:
+        username:
+          type: string
+        email:
+          type: string
+        role:
+          type: string
+          enum: [admin, user]
+        planId:
+          type: integer
+          nullable: true
+      required:
+        - username
+        - email
+
+    UpdateUserBody:
+      type: object
+      properties:
+        username:
+          type: string
+        email:
+          type: string
+        role:
+          type: string
+          enum: [admin, user]
+        planId:
+          type: integer
+          nullable: true
+
+    Server:
+      type: object
+      properties:
+        id:
+          type: integer
+        userId:
+          type: integer
+        name:
+          type: string
+        status:
+          type: string
+          enum: [running, stopped, error, starting]
+        ramUsedMB:
+          type: integer
+        cpuUsed:
+          type: integer
+        uptime:
+          type: integer
+        createdAt:
+          type: string
+        startedAt:
+          type: string
+          nullable: true
+      required:
+        - id
+        - userId
+        - name
+        - status
+        - ramUsedMB
+        - cpuUsed
+        - uptime
+        - createdAt
+
+    CreateServerBody:
+      type: object
+      properties:
+        userId:
+          type: integer
+        name:
+          type: string
+      required:
+        - userId
+        - name
+
+    UpdateServerStatusBody:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [running, stopped]
+      required:
+        - status
+
+    ConsoleLog:
+      type: object
+      properties:
+        id:
+          type: integer
+        serverId:
+          type: integer
+        message:
+          type: string
+        level:
+          type: string
+          enum: [info, warn, error, debug]
+        timestamp:
+          type: string
+      required:
+        - id
+        - serverId
+        - message
+        - level
+        - timestamp
+
+    AddLogBody:
+      type: object
+      properties:
+        message:
+          type: string
+        level:
+          type: string
+          enum: [info, warn, error, debug]
+      required:
+        - message
+        - level
+
+    DashboardStats:
+      type: object
+      properties:
+        totalUsers:
+          type: integer
+        totalServers:
+          type: integer
+        runningServers:
+          type: integer
+        stoppedServers:
+          type: integer
+        errorServers:
+          type: integer
+        totalPlans:
+          type: integer
+        totalRamUsedMB:
+          type: integer
+        avgCpuUsed:
+          type: number
+      required:
+        - totalUsers
+        - totalServers
+        - runningServers
+        - stoppedServers
+        - errorServers
+        - totalPlans
+        - totalRamUsedMB
+        - avgCpuUsed
+
+    UserStats:
+      type: object
+      properties:
+        userId:
+          type: integer
+        slotsUsed:
+          type: integer
+        slotsRunning:
+          type: integer
+        slotsStopped:
+          type: integer
+        maxSlots:
+          type: integer
+        pricePerMonth:
+          type: number
+        ramUsedMB:
+          type: integer
+        ramTotalMB:
+          type: integer
+        avgCpuUsed:
+          type: number
+        cpuLimit:
+          type: integer
+      required:
+        - userId
+        - slotsUsed
+        - slotsRunning
+        - slotsStopped
+        - maxSlots
+        - pricePerMonth
+        - ramUsedMB
+        - ramTotalMB
+        - avgCpuUsed
+        - cpuLimit
