@@ -381,7 +381,8 @@ async def api_delete_plan(plan_id: int):
 async def api_list_users():
     rows = await db.fetchall("""
         SELECT u.id, u.username, u.email, u.role, u.plan_id, u.created_at,
-               p.name as plan_name, p.max_slots, p.price_per_month,
+               u.plan_expires_at, u.last_payment_bdt, u.last_payment_days, u.last_payment_date,
+               p.name as plan_name, p.max_slots, p.price_per_month, p.price_bdt, p.duration_days,
                (SELECT COUNT(*) FROM servers s WHERE s.user_id=u.id) as slots_used,
                (SELECT COUNT(*) FROM servers s WHERE s.user_id=u.id AND s.status='running') as slots_running
         FROM users u LEFT JOIN plans p ON u.plan_id=p.id
@@ -405,29 +406,39 @@ async def api_get_user(user_id: int):
 class UserUpdateBody(BaseModel):
     planId: Optional[int] = None
     role: Optional[str] = None
-    planExpiresAt: Optional[str] = None  # ISO datetime string or None
+    paymentBdt: Optional[int] = None   # how much paid in ৳
+    paymentDays: Optional[int] = None  # how many days granted
 
 @app.put(f"{BASE}/api/users/{{user_id}}")
 async def api_update_user(user_id: int, body: UserUpdateBody):
-    from datetime import datetime as dt
-    expires = None
-    if body.planExpiresAt:
-        try:
-            expires = dt.fromisoformat(body.planExpiresAt.replace("Z",""))
-        except Exception:
-            expires = None
+    from datetime import datetime as dt, timedelta
 
-    # If plan changed and no explicit expiry set, auto-calculate from plan duration
-    if body.planId and not expires:
+    # Calculate expiry: days input > plan default duration > None
+    expires = None
+    if body.paymentDays and body.paymentDays > 0:
+        expires = dt.utcnow() + timedelta(days=body.paymentDays)
+    elif body.planId:
         plan = await db.fetchone("SELECT duration_days FROM plans WHERE id=$1", body.planId)
         if plan and plan.get("duration_days"):
-            from datetime import timedelta
             expires = dt.utcnow() + timedelta(days=plan["duration_days"])
 
+    payment_date = dt.utcnow() if (body.paymentBdt and body.paymentBdt > 0) else None
+
     row = await db.fetchone(
-        """UPDATE users SET plan_id=$2, role=COALESCE($3::user_role,role), plan_expires_at=$4
-           WHERE id=$1 RETURNING id,username,email,role,plan_id,plan_expires_at""",
-        user_id, body.planId, body.role, expires
+        """UPDATE users
+           SET plan_id=$2,
+               role=COALESCE($3::user_role, role),
+               plan_expires_at=$4,
+               last_payment_bdt=COALESCE($5, last_payment_bdt),
+               last_payment_days=COALESCE($6, last_payment_days),
+               last_payment_date=COALESCE($7, last_payment_date)
+           WHERE id=$1
+           RETURNING id, username, email, role, plan_id, plan_expires_at,
+                     last_payment_bdt, last_payment_days, last_payment_date""",
+        user_id, body.planId, body.role, expires,
+        body.paymentBdt if body.paymentBdt else None,
+        body.paymentDays if body.paymentDays else None,
+        payment_date
     )
     if not row:
         raise HTTPException(404, "User not found")

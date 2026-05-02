@@ -5,7 +5,7 @@
 <div class="page-header-row" style="margin-bottom:20px">
   <div>
     <h1 class="page-title">Users</h1>
-    <p class="page-sub">Manage accounts, assign packages, set expiry, and change roles.</p>
+    <p class="page-sub">Package assign করুন — কত ৳ টাকা ও কত দিন সেট করুন।</p>
   </div>
   <div class="log-search-wrap" style="width:210px">
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
@@ -13,7 +13,7 @@
   </div>
 </div>
 
-<!-- Plan distribution -->
+<!-- Plan distribution chips -->
 <div class="pkg-summary" id="pkg-summary" style="margin-bottom:18px"></div>
 
 <div class="table-wrap">
@@ -23,21 +23,24 @@
         <th>User</th>
         <th>Package</th>
         <th>Expiry</th>
+        <th>Last Payment</th>
         <th>Usage</th>
         <th>Role</th>
         <th></th>
       </tr>
     </thead>
     <tbody id="users-body">
-      <tr><td colspan="6" class="tbl-loading">Loading…</td></tr>
+      <tr><td colspan="7" class="tbl-loading">Loading…</td></tr>
     </tbody>
   </table>
 </div>
 
 <!-- Edit user modal -->
 <div class="modal-overlay" id="user-modal">
-  <div class="modal" style="width:480px">
-    <div class="modal-title" style="display:flex;align-items:center;gap:8px">
+  <div class="modal" style="width:500px">
+
+    <!-- Header -->
+    <div class="modal-title" style="display:flex;align-items:center;gap:8px;margin-bottom:16px">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--violet-l)" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle></svg>
       Edit User
     </div>
@@ -56,52 +59,92 @@
       </div>
     </div>
 
-    <!-- Package picker -->
-    <div class="form-group" style="margin-bottom:14px">
-      <label style="font-size:11px;color:var(--text3);display:block;margin-bottom:8px;text-transform:uppercase;letter-spacing:.07em;font-weight:600">Assign Package</label>
-      <div class="pkg-picker" id="um-plan-picker"></div>
+    <!-- ── Section: Package ─────────────────────────── -->
+    <div class="um-section-label">
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>
+      Package
+    </div>
+    <div class="pkg-picker" id="um-plan-picker" style="margin-bottom:16px"></div>
+
+    <!-- ── Section: Payment ─────────────────────────── -->
+    <div class="um-section-label">
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="9" x2="20" y2="9"></line><line x1="4" y1="15" x2="20" y2="15"></line><line x1="10" y1="3" x2="8" y2="21"></line><line x1="16" y1="3" x2="14" y2="21"></line></svg>
+      Payment — কত টাকা · কত দিন
     </div>
 
-    <!-- Expiry date -->
-    <div class="form-group" style="margin-bottom:14px" id="expiry-row">
-      <label style="font-size:11px;color:var(--text3);display:flex;align-items:center;gap:6px;margin-bottom:6px;text-transform:uppercase;letter-spacing:.07em;font-weight:600">
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-        Plan Expires
-        <span id="expiry-auto-label" style="font-size:10px;color:var(--violet-l);font-weight:400;text-transform:none;letter-spacing:0"></span>
+    <div class="pay-grid">
+      <!-- Taka -->
+      <div class="form-group">
+        <label style="font-size:11px;color:var(--text3)">Amount Received (৳ BDT)</label>
+        <div class="pay-input-wrap">
+          <span class="pay-currency">৳</span>
+          <input type="number" id="um-bdt" placeholder="0" min="0" class="pay-input" oninput="updatePayPreview()" />
+        </div>
+        <div class="pay-quick-btns">
+          <button class="pay-quick" onclick="setTaka(99)">৳99</button>
+          <button class="pay-quick" onclick="setTaka(199)">৳199</button>
+          <button class="pay-quick" onclick="setTaka(299)">৳299</button>
+          <button class="pay-quick" onclick="setTaka(599)">৳599</button>
+          <button class="pay-quick" onclick="setTaka(1499)">৳1499</button>
+        </div>
+      </div>
+
+      <!-- Days -->
+      <div class="form-group">
+        <label style="font-size:11px;color:var(--text3)">Access Duration (দিন)</label>
+        <div class="pay-input-wrap">
+          <input type="number" id="um-days" placeholder="e.g. 30" min="1" class="pay-input pay-input-days" oninput="updatePayPreview()" />
+          <span class="pay-days-suffix">days</span>
+        </div>
+        <div class="pay-quick-btns">
+          <button class="pay-quick" onclick="setDays(7)">7d</button>
+          <button class="pay-quick" onclick="setDays(14)">14d</button>
+          <button class="pay-quick" onclick="setDays(30)">30d</button>
+          <button class="pay-quick" onclick="setDays(60)">60d</button>
+          <button class="pay-quick" onclick="setDays(90)">90d</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Payment preview -->
+    <div class="pay-preview" id="pay-preview" style="display:none">
+      <div class="pay-preview-row">
+        <span class="pay-preview-label">Expires on</span>
+        <span class="pay-preview-val" id="pp-expiry">—</span>
+      </div>
+      <div class="pay-preview-row">
+        <span class="pay-preview-label">Amount</span>
+        <span class="pay-preview-val taka" id="pp-taka">৳0</span>
+      </div>
+    </div>
+
+    <!-- ── Section: Role ────────────────────────────── -->
+    <div class="um-section-label" style="margin-top:6px">
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+      Role
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:0">
+      <label class="role-radio" style="flex:1">
+        <input type="radio" name="um-role" value="user">
+        <span class="role-radio-label">
+          <span class="role-badge user">user</span>
+          <span style="font-size:11px;color:var(--text3);margin-top:2px">Standard access</span>
+        </span>
       </label>
-      <div style="display:flex;gap:8px;align-items:center">
-        <input type="datetime-local" id="um-expires" style="flex:1" />
-        <button class="btn btn-ghost" style="height:34px;padding:0 10px;font-size:11px" onclick="clearExpiry()">Clear</button>
-        <button class="btn btn-ghost" style="height:34px;padding:0 10px;font-size:11px" onclick="setExpiryDays(7)">+7d</button>
-        <button class="btn btn-ghost" style="height:34px;padding:0 10px;font-size:11px" onclick="setExpiryDays(30)">+30d</button>
-      </div>
-      <div id="expiry-status" style="font-size:11px;margin-top:5px"></div>
-    </div>
-
-    <!-- Role -->
-    <div class="form-group" style="margin-bottom:0">
-      <label style="font-size:11px;color:var(--text3);display:block;margin-bottom:8px;text-transform:uppercase;letter-spacing:.07em;font-weight:600">Role</label>
-      <div style="display:flex;gap:8px">
-        <label class="role-radio" style="flex:1">
-          <input type="radio" name="um-role" value="user">
-          <span class="role-radio-label">
-            <span class="role-badge user">user</span>
-            <span style="font-size:11px;color:var(--text3);margin-top:2px">Standard access</span>
-          </span>
-        </label>
-        <label class="role-radio" style="flex:1">
-          <input type="radio" name="um-role" value="admin">
-          <span class="role-radio-label">
-            <span class="role-badge admin">admin</span>
-            <span style="font-size:11px;color:var(--text3);margin-top:2px">Full admin access</span>
-          </span>
-        </label>
-      </div>
+      <label class="role-radio" style="flex:1">
+        <input type="radio" name="um-role" value="admin">
+        <span class="role-radio-label">
+          <span class="role-badge admin">admin</span>
+          <span style="font-size:11px;color:var(--text3);margin-top:2px">Full access</span>
+        </span>
+      </label>
     </div>
 
     <div class="modal-actions" style="display:flex;gap:8px">
       <button class="btn btn-ghost" style="flex:1" onclick="closeUserModal()">Cancel</button>
-      <button class="btn btn-primary" style="flex:1" id="um-save-btn" onclick="saveUser()">Save Changes</button>
+      <button class="btn btn-primary" style="flex:1" id="um-save-btn" onclick="saveUser()">
+        Save &amp; Assign Package
+      </button>
     </div>
   </div>
 </div>
@@ -117,10 +160,21 @@ async function loadPlans() {
   try { allPlans = await api('/api/plans'); } catch(e) {}
 }
 
+/* ── Helpers ───────────────────────────────────────────── */
+function escHtml(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
 function fmtDate(s) {
   if (!s) return null;
+  return new Date(s).toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' });
+}
+
+function fmtDatetime(s) {
+  if (!s) return null;
   const d = new Date(s);
-  return d.toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' });
+  return d.toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' })
+       + ' ' + d.toLocaleTimeString('en-US', { hour:'2-digit', minute:'2-digit' });
 }
 
 function fmtExpiry(s) {
@@ -128,15 +182,11 @@ function fmtExpiry(s) {
   const now = new Date();
   const exp = new Date(s);
   const diff = Math.ceil((exp - now) / 86400000);
-  if (diff < 0) return { text: `Expired ${Math.abs(diff)}d ago`, cls: 'expiry-expired' };
-  if (diff === 0) return { text: 'Expires today', cls: 'expiry-soon' };
-  if (diff <= 3) return { text: `Expires in ${diff}d`, cls: 'expiry-soon' };
-  if (diff <= 7) return { text: `${diff} days left`, cls: 'expiry-warn' };
+  if (diff < 0)  return { text: `Expired ${Math.abs(diff)}d ago`, cls: 'expiry-expired' };
+  if (diff === 0) return { text: 'Expires today!', cls: 'expiry-soon' };
+  if (diff <= 3)  return { text: `${diff}d left`, cls: 'expiry-soon' };
+  if (diff <= 7)  return { text: `${diff} days left`, cls: 'expiry-warn' };
   return { text: fmtDate(s), cls: 'expiry-ok' };
-}
-
-function escHtml(s) {
-  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
 function slotBar(running, max) {
@@ -152,11 +202,12 @@ function slotBar(running, max) {
 
 function planBadge(u) {
   if (!u.plan_name) return `<span class="pkg-none-badge">No Package</span>`;
+  const price = u.price_bdt > 0 ? `৳${u.price_bdt}/mo` : u.price_per_month > 0 ? `$${u.price_per_month}/mo` : 'Free';
   return `<div class="pkg-badge">
     <div class="pkg-badge-dot"></div>
     <div>
       <div class="pkg-badge-name">${escHtml(u.plan_name)}</div>
-      <div class="pkg-badge-price">${u.price_bdt > 0 ? '৳'+u.price_bdt.toLocaleString()+'/mo' : u.price_per_month > 0 ? '$'+u.price_per_month+'/mo' : 'Free'}</div>
+      <div class="pkg-badge-price">${price}</div>
     </div>
   </div>`;
 }
@@ -169,24 +220,34 @@ function expiryCell(u) {
   return `<span class="expiry-pill ${e.cls}">${e.text}</span>`;
 }
 
+function paymentCell(u) {
+  if (!u.last_payment_bdt && !u.last_payment_days) return `<span style="font-size:11px;color:var(--text3)">—</span>`;
+  const taka = u.last_payment_bdt > 0 ? `<span class="pay-cell-taka">৳${u.last_payment_bdt}</span>` : '';
+  const days = u.last_payment_days > 0 ? `<span class="pay-cell-days">${u.last_payment_days}d</span>` : '';
+  const date = u.last_payment_date ? `<div style="font-size:10px;color:var(--text3);margin-top:2px">${fmtDate(u.last_payment_date)}</div>` : '';
+  return `<div>${taka}${taka && days ? ' · ' : ''}${days}${date}</div>`;
+}
+
+/* ── Load & render ─────────────────────────────────────── */
 async function loadUsers() {
   try {
     allUsers = await api('/api/users');
     renderUsers(allUsers);
     renderPkgSummary(allUsers);
   } catch(e) {
-    document.getElementById('users-body').innerHTML = `<tr><td colspan="6" class="tbl-loading" style="color:var(--red)">Failed to load users</td></tr>`;
+    document.getElementById('users-body').innerHTML =
+      `<tr><td colspan="7" class="tbl-loading" style="color:var(--red)">Failed to load</td></tr>`;
   }
 }
 
 function renderUsers(users) {
   const tbody = document.getElementById('users-body');
   if (!users.length) {
-    tbody.innerHTML = `<tr><td colspan="6" class="tbl-loading">No users found</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="7" class="tbl-loading">No users found</td></tr>`;
     return;
   }
   tbody.innerHTML = users.map(u => `
-    <tr data-name="${escHtml((u.username||'').toLowerCase())}" data-email="${escHtml((u.email||'').toLowerCase())}">
+    <tr data-name="${(u.username||'').toLowerCase()}" data-email="${(u.email||'').toLowerCase()}">
       <td>
         <div style="display:flex;align-items:center;gap:10px">
           <div class="user-avatar" style="width:32px;height:32px;font-size:12px">${(u.username||'?')[0].toUpperCase()}</div>
@@ -198,6 +259,7 @@ function renderUsers(users) {
       </td>
       <td>${planBadge(u)}</td>
       <td>${expiryCell(u)}</td>
+      <td>${paymentCell(u)}</td>
       <td>${slotBar(u.slots_running||0, u.max_slots||0)}</td>
       <td><span class="role-badge ${u.role}">${u.role}</span></td>
       <td>
@@ -209,13 +271,10 @@ function renderUsers(users) {
 }
 
 function renderPkgSummary(users) {
-  const planCounts = {};
-  users.forEach(u => {
-    const key = u.plan_name || 'No Package';
-    planCounts[key] = (planCounts[key]||0) + 1;
-  });
+  const counts = {};
+  users.forEach(u => { const k = u.plan_name || 'No Package'; counts[k] = (counts[k]||0)+1; });
   const total = users.length;
-  document.getElementById('pkg-summary').innerHTML = Object.entries(planCounts).map(([name,count]) => {
+  document.getElementById('pkg-summary').innerHTML = Object.entries(counts).map(([name,count]) => {
     const pct = Math.round((count/total)*100);
     const isNone = name === 'No Package';
     return `<div class="pkg-stat-chip ${isNone?'pkg-stat-none':''}">
@@ -235,35 +294,46 @@ function filterUsers() {
 }
 
 /* ── Modal helpers ─────────────────────────────────────── */
-function clearExpiry() { document.getElementById('um-expires').value = ''; updateExpiryStatus(); }
+function setTaka(v) { document.getElementById('um-bdt').value = v; updatePayPreview(); }
+function setDays(v) { document.getElementById('um-days').value = v; updatePayPreview(); }
 
-function setExpiryDays(days) {
-  const d = new Date(Date.now() + days * 86400000);
-  const local = new Date(d.getTime() - d.getTimezoneOffset()*60000).toISOString().slice(0,16);
-  document.getElementById('um-expires').value = local;
-  updateExpiryStatus();
-}
+function updatePayPreview() {
+  const bdt  = parseInt(document.getElementById('um-bdt').value) || 0;
+  const days = parseInt(document.getElementById('um-days').value) || 0;
+  const preview = document.getElementById('pay-preview');
 
-function updateExpiryStatus() {
-  const val = document.getElementById('um-expires').value;
-  const el = document.getElementById('expiry-status');
-  if (!val) { el.textContent = ''; return; }
-  const e = fmtExpiry(val + ':00Z');
-  el.innerHTML = `<span class="expiry-pill ${e.cls}">${e.text}</span>`;
-}
+  if (!bdt && !days) { preview.style.display = 'none'; return; }
+  preview.style.display = 'block';
 
-document.getElementById('um-expires').addEventListener('change', updateExpiryStatus);
-
-// When plan changes, auto-fill expiry from plan duration
-document.getElementById('um-plan-picker').addEventListener('change', e => {
-  const planId = e.target.value;
-  if (!planId) { document.getElementById('expiry-auto-label').textContent = ''; return; }
-  const plan = allPlans.find(p => p.id == planId);
-  if (plan && plan.duration_days) {
-    setExpiryDays(plan.duration_days);
-    document.getElementById('expiry-auto-label').textContent = `(auto: ${plan.duration_days}d from ${plan.name})`;
+  if (days > 0) {
+    const exp = new Date(Date.now() + days * 86400000);
+    document.getElementById('pp-expiry').textContent = fmtDatetime(exp);
   } else {
-    document.getElementById('expiry-auto-label').textContent = '';
+    document.getElementById('pp-expiry').textContent = '∞ Unlimited';
+  }
+  document.getElementById('pp-taka').textContent = bdt > 0 ? `৳${bdt.toLocaleString()}` : 'Free';
+
+  // Also auto-select plan duration hint
+  const planId = document.querySelector('input[name="um-plan"]:checked')?.value;
+  if (planId && !days) {
+    const plan = allPlans.find(p => p.id == planId);
+    if (plan?.duration_days) setDays(plan.duration_days);
+  }
+}
+
+// Auto-fill days when plan is selected
+document.addEventListener('change', e => {
+  if (e.target.name === 'um-plan') {
+    const planId = e.target.value;
+    if (!planId) return;
+    const plan = allPlans.find(p => p.id == planId);
+    if (plan) {
+      if (plan.duration_days) setDays(plan.duration_days);
+      if (plan.price_bdt > 0 && !document.getElementById('um-bdt').value) {
+        document.getElementById('um-bdt').value = plan.price_bdt;
+      }
+      updatePayPreview();
+    }
   }
 });
 
@@ -274,43 +344,47 @@ function openEditUser(u) {
   document.getElementById('um-email').textContent = u.email;
   document.getElementById('um-joined').textContent = 'Joined ' + (fmtDate(u.created_at) || '—');
   document.getElementById('um-srv-count').textContent = u.slots_used || 0;
-  document.getElementById('expiry-auto-label').textContent = '';
 
-  // Set expiry field
-  const expiresEl = document.getElementById('um-expires');
-  if (u.plan_expires_at) {
-    const d = new Date(u.plan_expires_at);
-    expiresEl.value = new Date(d.getTime() - d.getTimezoneOffset()*60000).toISOString().slice(0,16);
-  } else {
-    expiresEl.value = '';
-  }
-  updateExpiryStatus();
+  // Reset payment fields
+  document.getElementById('um-bdt').value = '';
+  document.getElementById('um-days').value = '';
+  document.getElementById('pay-preview').style.display = 'none';
 
   // Build package picker
   const picker = document.getElementById('um-plan-picker');
-  const noPlanChecked = !u.plan_id;
   const opts = [`<label class="pkg-opt">
-    <input type="radio" name="um-plan" value="" ${noPlanChecked?'checked':''}>
+    <input type="radio" name="um-plan" value="" ${!u.plan_id?'checked':''}>
     <div class="pkg-opt-card no-plan">
       <div class="pkg-opt-name">No Package</div>
-      <div class="pkg-opt-desc">No hosting plan assigned</div>
+      <div class="pkg-opt-desc">কোনো plan assign করা নেই</div>
     </div>
   </label>`];
+
   allPlans.forEach(p => {
-    const dur = p.duration_days ? `· ${p.duration_days}d` : '· Unlimited';
-    const price = p.price_bdt > 0 ? `৳${p.price_bdt.toLocaleString()}/mo` : p.price_per_month > 0 ? `$${p.price_per_month}/mo` : 'Free';
+    const priceStr = p.price_bdt > 0 ? `৳${p.price_bdt}/mo` : p.price_per_month > 0 ? `$${p.price_per_month}/mo` : 'Free';
+    const durStr   = p.duration_days ? `${p.duration_days} দিন` : 'Unlimited';
+    const ramStr   = p.ram_mb >= 1024 ? (p.ram_mb/1024).toFixed(1)+'GB' : p.ram_mb+'MB';
     opts.push(`<label class="pkg-opt">
       <input type="radio" name="um-plan" value="${p.id}" ${u.plan_id==p.id?'checked':''}>
       <div class="pkg-opt-card">
         <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
           <div class="pkg-opt-name">${escHtml(p.name)}</div>
-          <div class="pkg-opt-price">${price}</div>
+          <div class="pkg-opt-price">${priceStr}</div>
         </div>
-        <div class="pkg-opt-desc">${p.max_slots} slot${p.max_slots!==1?'s':''} · ${p.ram_mb>=1024?(p.ram_mb/1024).toFixed(1)+'GB':p.ram_mb+'MB'} RAM ${dur}</div>
+        <div class="pkg-opt-desc">${p.max_slots} slot · ${ramStr} RAM · ${durStr}</div>
       </div>
     </label>`);
   });
   picker.innerHTML = opts.join('');
+
+  // Pre-fill last payment info as hint
+  if (u.last_payment_bdt > 0) {
+    document.getElementById('um-bdt').value = u.last_payment_bdt;
+  }
+  if (u.last_payment_days > 0) {
+    document.getElementById('um-days').value = u.last_payment_days;
+  }
+  updatePayPreview();
 
   document.querySelector(`input[name="um-role"][value="${u.role}"]`).checked = true;
   document.getElementById('user-modal').classList.add('show');
@@ -320,24 +394,27 @@ function closeUserModal() { document.getElementById('user-modal').classList.remo
 
 async function saveUser() {
   const planVal = document.querySelector('input[name="um-plan"]:checked')?.value;
-  const role = document.querySelector('input[name="um-role"]:checked')?.value;
-  const expiresVal = document.getElementById('um-expires').value;
+  const role    = document.querySelector('input[name="um-role"]:checked')?.value;
+  const bdt     = parseInt(document.getElementById('um-bdt').value) || 0;
+  const days    = parseInt(document.getElementById('um-days').value) || 0;
+
   const btn = document.getElementById('um-save-btn');
   btn.disabled = true; btn.textContent = 'Saving…';
   try {
     await api(`/api/users/${editUserId}`, {
       method: 'PUT',
       body: {
-        planId: planVal ? +planVal : null,
+        planId:      planVal ? +planVal : null,
         role,
-        planExpiresAt: expiresVal ? new Date(expiresVal).toISOString() : null,
+        paymentBdt:  bdt  || null,
+        paymentDays: days || null,
       }
     });
-    toast('User updated');
+    toast('✓ Package assigned successfully');
     closeUserModal();
     loadUsers();
   } catch(e) { toast('Failed: ' + e.message); }
-  finally { btn.disabled = false; btn.textContent = 'Save Changes'; }
+  finally { btn.disabled = false; btn.textContent = 'Save & Assign Package'; }
 }
 
 document.getElementById('user-modal').addEventListener('click', e => {
